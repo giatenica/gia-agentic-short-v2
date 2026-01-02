@@ -584,6 +584,253 @@ class LiteratureSynthesis(BaseModel):
     )
 
 
+# =============================================================================
+# Gap Analysis Models
+# =============================================================================
+
+
+class ResearchGap(BaseModel):
+    """A single research gap identified in the literature."""
+    
+    gap_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique gap identifier"
+    )
+    gap_type: str = Field(
+        ...,
+        description="Type of gap (methodological, empirical, theoretical, etc.)"
+    )
+    title: str = Field(
+        ...,
+        min_length=5,
+        max_length=200,
+        description="Short title for the gap"
+    )
+    description: str = Field(
+        ...,
+        min_length=20,
+        description="Detailed description of the gap"
+    )
+    significance: str = Field(
+        default="medium",
+        description="Significance level (high, medium, low)"
+    )
+    significance_justification: str = Field(
+        default="",
+        description="Why this gap is significant"
+    )
+    supporting_evidence: list[str] = Field(
+        default_factory=list,
+        description="Evidence from literature supporting this gap"
+    )
+    related_papers: list[str] = Field(
+        default_factory=list,
+        description="Paper IDs/titles that relate to this gap"
+    )
+    addressable: bool = Field(
+        default=True,
+        description="Whether this gap can be addressed in current research"
+    )
+    addressability_notes: str = Field(
+        default="",
+        description="Notes on how/whether gap can be addressed"
+    )
+
+
+class GapAnalysis(BaseModel):
+    """Complete gap analysis result from the GAP_IDENTIFIER node."""
+    
+    analysis_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique gap analysis identifier"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Analysis timestamp"
+    )
+    
+    # Input context
+    original_question: str = Field(
+        ...,
+        description="Original research question being analyzed"
+    )
+    literature_coverage_summary: str = Field(
+        default="",
+        description="Summary of what the literature covers"
+    )
+    
+    # Identified gaps
+    gaps: list[ResearchGap] = Field(
+        default_factory=list,
+        description="All identified research gaps"
+    )
+    primary_gap: ResearchGap | None = Field(
+        default=None,
+        description="The most significant addressable gap"
+    )
+    
+    # Coverage analysis
+    coverage_comparison: str = Field(
+        default="",
+        description="Comparison of what's covered vs. what's asked"
+    )
+    coverage_percentage: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Estimated percentage of question covered by literature"
+    )
+    
+    # Gap categorization
+    methodological_gaps: list[str] = Field(
+        default_factory=list,
+        description="Gaps in methods/approaches"
+    )
+    empirical_gaps: list[str] = Field(
+        default_factory=list,
+        description="Gaps in empirical evidence"
+    )
+    theoretical_gaps: list[str] = Field(
+        default_factory=list,
+        description="Gaps in theory/frameworks"
+    )
+    
+    # Ranking
+    gap_significance_ranking: list[str] = Field(
+        default_factory=list,
+        description="Gap IDs ranked by significance"
+    )
+    
+    @property
+    def gap_count(self) -> int:
+        """Total number of identified gaps."""
+        return len(self.gaps)
+    
+    @property
+    def high_significance_gaps(self) -> list[ResearchGap]:
+        """Gaps with high significance."""
+        return [g for g in self.gaps if g.significance == "high"]
+    
+    def get_gap_by_type(self, gap_type: str) -> list[ResearchGap]:
+        """Get all gaps of a specific type."""
+        return [g for g in self.gaps if g.gap_type == gap_type]
+
+
+class ContributionStatement(BaseModel):
+    """Contribution statement generated from gap analysis."""
+    
+    statement_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique statement identifier"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp"
+    )
+    
+    # The contribution
+    main_statement: str = Field(
+        ...,
+        min_length=20,
+        description="Main contribution statement"
+    )
+    contribution_type: str = Field(
+        default="empirical",
+        description="Type of contribution (methodological, empirical, theoretical)"
+    )
+    
+    # Supporting information
+    gap_addressed: str = Field(
+        default="",
+        description="Which gap this contribution addresses"
+    )
+    novelty_explanation: str = Field(
+        default="",
+        description="What makes this contribution novel"
+    )
+    
+    # Positioning
+    position_in_literature: str = Field(
+        default="",
+        description="How this fits with existing work"
+    )
+    differentiation: str = Field(
+        default="",
+        description="How this differs from prior work"
+    )
+    prior_work_comparison: list[str] = Field(
+        default_factory=list,
+        description="Specific comparisons to prior papers"
+    )
+    
+    # Impact
+    potential_impact: str = Field(
+        default="",
+        description="Expected impact of this contribution"
+    )
+    target_audience: list[str] = Field(
+        default_factory=list,
+        description="Who would benefit from this contribution"
+    )
+
+
+class RefinedResearchQuestion(BaseModel):
+    """A refined research question based on gap analysis."""
+    
+    question_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique question identifier"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp"
+    )
+    
+    # Questions
+    original_question: str = Field(
+        ...,
+        description="Original research question"
+    )
+    refined_question: str = Field(
+        ...,
+        description="Refined research question"
+    )
+    
+    # Refinement details
+    refinement_rationale: str = Field(
+        default="",
+        description="Why the question was refined"
+    )
+    gap_targeted: str = Field(
+        default="",
+        description="Which gap the refined question targets"
+    )
+    scope_changes: list[str] = Field(
+        default_factory=list,
+        description="How scope was narrowed or adjusted"
+    )
+    
+    # Quality indicators
+    specificity_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="How specific/focused the refined question is"
+    )
+    feasibility_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="How feasible the refined question is to answer"
+    )
+    novelty_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="How novel the refined question is"
+    )
+
+
 class AnalysisResult(BaseModel):
     """Results from the analysis phase."""
     
