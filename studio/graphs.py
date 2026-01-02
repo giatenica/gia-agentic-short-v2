@@ -15,7 +15,7 @@ from langgraph.graph import StateGraph, START, END
 
 from src.agents import create_react_agent, create_research_agent
 from src.state.schema import WorkflowState
-from src.state.enums import ResearchStatus, PlanApprovalStatus
+from src.state.enums import ResearchStatus
 from src.nodes import (
     intake_node,
     literature_reviewer_node,

@@ -15,8 +15,6 @@ from src.config import settings
 from src.state.enums import (
     MethodologyType,
     AnalysisApproach,
-    ResearchType,
-    GapType,
 )
 
 
@@ -406,6 +404,7 @@ Provide a feasibility assessment."""
             score = float(score_str.strip())
             score = max(0.0, min(1.0, score))
         except (ValueError, IndexError):
+            # Parsing failed; use default score (0.7)
             pass
     
     # Extract assessment

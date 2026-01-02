@@ -42,13 +42,22 @@ from src.tools.analysis_design import (
     design_qualitative_analysis,
     determine_paper_sections,
     define_success_criteria,
-    map_variables_to_analysis,
 )
 
 
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
+
+def _safe_analysis_approach(value: str | None) -> AnalysisApproach:
+    """Safely convert string to AnalysisApproach enum, defaulting to OTHER."""
+    if value is None:
+        return AnalysisApproach.OTHER
+    try:
+        return AnalysisApproach(value)
+    except ValueError:
+        return AnalysisApproach.OTHER
 
 
 def _extract_gap_info(state: WorkflowState) -> dict[str, Any]:
@@ -250,7 +259,7 @@ def planner_node(state: WorkflowState) -> dict[str, Any]:
             gap_analysis=gap_analysis_dict,
             methodology_type=methodology_type,
             research_question=research_question,
-            model_name="claude-3-5-haiku-latest",
+            model_name=settings.default_model,
         )
         
         # Step 7: Generate methodology explanation
@@ -271,7 +280,7 @@ def planner_node(state: WorkflowState) -> dict[str, Any]:
             methodology=methodology_type.value,
             methodology_justification=methodology_explanation,
             methodology_precedents=methodology_precedents[:5],
-            analysis_approach=AnalysisApproach(methodology_result.get("recommended_analysis", "other")),
+            analysis_approach=_safe_analysis_approach(methodology_result.get("recommended_analysis", "other")),
             analysis_design=analysis_design.get("full_design", ""),
             statistical_tests=analysis_design.get("statistical_tests", []),
             key_variables=analysis_design.get("independent_variables", state.get("key_variables", [])),
@@ -400,6 +409,7 @@ def _process_plan_approval(
                     plan.methodology_type = MethodologyType(approval_response["methodology"])
                     plan.methodology = approval_response["methodology"]
                 except ValueError:
+                    # Invalid methodology type; keep original
                     pass
             
             if approval_response.get("additional_criteria"):
@@ -415,7 +425,8 @@ def _process_plan_approval(
             plan.approval_notes = approval_response.get("feedback", str(approval_response))
             plan.revision_count += 1
     
-    plan.revised_at = datetime.utcnow()
+    if hasattr(plan, "revised_at"):
+        plan.revised_at = datetime.utcnow()
     return plan
 
 

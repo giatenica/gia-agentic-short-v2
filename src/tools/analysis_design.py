@@ -14,8 +14,6 @@ from src.config import settings
 from src.state.enums import (
     MethodologyType,
     AnalysisApproach,
-    ResearchType,
-    PaperType,
 )
 
 

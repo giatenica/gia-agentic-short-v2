@@ -21,7 +21,6 @@ from src.state.models import (
     RefinedResearchQuestion,
     ResearchGap,
     ResearchPlan,
-    SearchResult,
 )
 
 
