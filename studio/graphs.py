@@ -2,6 +2,12 @@
 
 Note: LangGraph Studio/API handles persistence automatically.
 Don't pass checkpointer/store here - the platform provides these.
+
+Node-level caching is enabled by default to speed up development and testing.
+Configure via environment variables:
+    CACHE_ENABLED=true/false
+    CACHE_TTL_DEFAULT=1800 (seconds)
+See src/cache/__init__.py for full configuration options.
 """
 
 import os
@@ -30,6 +36,8 @@ from src.nodes import (
     route_after_conceptual_synthesizer,
     writer_node,
 )
+from src.cache import get_cache, get_cache_policy
+from src.config import settings
 
 # Create agent instances for Studio
 # Note: Don't pass checkpointer/store - LangGraph API handles persistence
@@ -222,22 +230,72 @@ def create_research_workflow() -> StateGraph:
     - WRITER node for paper composition
     - Section writers for each paper component
     - Style enforcement and citation management
+    
+    Node-level caching:
+    - Enabled by default (CACHE_ENABLED=true)
+    - Caches LLM responses to avoid redundant computation
+    - TTLs configured per node type for optimal freshness
+    - Nodes with interrupt() (planner) are NOT cached
     """
     workflow = StateGraph(WorkflowState)
     
+    # Get cache policies for each node type
+    # Nodes that should NOT be cached: intake (always fresh), planner (has interrupt)
+    literature_policy = get_cache_policy(ttl=settings.cache_ttl_literature)
+    synthesis_policy = get_cache_policy(ttl=settings.cache_ttl_synthesis)
+    gap_policy = get_cache_policy(ttl=settings.cache_ttl_gap_analysis)
+    writer_policy = get_cache_policy(ttl=settings.cache_ttl_writer)
+    
     # Add nodes (Sprints 1-4)
+    # intake: No caching - always process fresh user input
     workflow.add_node("intake", intake_node)
-    workflow.add_node("literature_reviewer", literature_reviewer_node)
-    workflow.add_node("literature_synthesizer", literature_synthesizer_node)
-    workflow.add_node("gap_identifier", gap_identifier_node)
+    
+    # literature_reviewer: Cache for 1 hour (API calls are expensive)
+    workflow.add_node(
+        "literature_reviewer", 
+        literature_reviewer_node,
+        cache_policy=literature_policy
+    )
+    
+    # literature_synthesizer: Cache for 30 minutes
+    workflow.add_node(
+        "literature_synthesizer", 
+        literature_synthesizer_node,
+        cache_policy=synthesis_policy
+    )
+    
+    # gap_identifier: Cache for 30 minutes
+    workflow.add_node(
+        "gap_identifier", 
+        gap_identifier_node,
+        cache_policy=gap_policy
+    )
+    
+    # planner: No caching - has interrupt() for human approval
     workflow.add_node("planner", planner_node)
     
     # Add Sprint 5 nodes
-    workflow.add_node("data_analyst", data_analyst_node)
-    workflow.add_node("conceptual_synthesizer", conceptual_synthesizer_node)
+    # data_analyst: Cache for 30 minutes (analysis is expensive)
+    workflow.add_node(
+        "data_analyst", 
+        data_analyst_node,
+        cache_policy=synthesis_policy
+    )
+    
+    # conceptual_synthesizer: Cache for 30 minutes
+    workflow.add_node(
+        "conceptual_synthesizer", 
+        conceptual_synthesizer_node,
+        cache_policy=synthesis_policy
+    )
     
     # Add Sprint 6 nodes
-    workflow.add_node("writer", writer_node)
+    # writer: Cache for 10 minutes (shorter TTL as writing may need iteration)
+    workflow.add_node(
+        "writer", 
+        writer_node,
+        cache_policy=writer_policy
+    )
     
     # Add edges (Sprints 1-4)
     workflow.add_edge(START, "intake")
@@ -284,7 +342,9 @@ def create_research_workflow() -> StateGraph:
     # Sprint 6: WRITER leads to END
     workflow.add_edge("writer", END)
     
-    return workflow.compile()
+    # Compile with cache backend (None if caching disabled)
+    cache = get_cache()
+    return workflow.compile(cache=cache)
 
 
 # Create the workflow instance for Studio
