@@ -1,7 +1,5 @@
 """Unit tests for node-level caching module."""
 
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -129,7 +127,7 @@ class TestCacheBackend:
         from src.config import settings
         
         if settings.cache_enabled:
-            cache = get_cache()
+            get_cache()
             
             # Directory should exist
             cache_path = Path(settings.cache_path)
@@ -153,58 +151,46 @@ class TestCacheDisabled:
     def test_get_cache_returns_none_when_disabled(self):
         """get_cache should return None when caching is disabled."""
         from src.cache import get_cache
-        
-        # Temporarily disable caching
         from src.config import settings
-        original_enabled = settings.cache_enabled
+        import src.cache as cache_module
         
-        try:
-            settings.cache_enabled = False
-            
+        # Use patch.object for proper test isolation
+        with patch.object(settings, "cache_enabled", False):
             # Reset the singleton
-            import src.cache as cache_module
             cache_module._cache_instance = None
             
             cache = get_cache()
             assert cache is None
-        finally:
-            settings.cache_enabled = original_enabled
-            cache_module._cache_instance = None
+        
+        # Ensure singleton is reset after the test
+        cache_module._cache_instance = None
     
     def test_get_cache_policy_returns_none_when_disabled(self):
         """get_cache_policy should return None when caching is disabled."""
         from src.cache import get_cache_policy
         from src.config import settings
         
-        original_enabled = settings.cache_enabled
-        
-        try:
-            settings.cache_enabled = False
-            
+        # Use patch.object for proper test isolation
+        with patch.object(settings, "cache_enabled", False):
             policy = get_cache_policy(ttl=3600)
             assert policy is None
-        finally:
-            settings.cache_enabled = original_enabled
     
     def test_clear_cache_returns_false_when_disabled(self):
         """clear_cache should return False when caching is disabled."""
         from src.cache import clear_cache
         from src.config import settings
+        import src.cache as cache_module
         
-        original_enabled = settings.cache_enabled
-        
-        try:
-            settings.cache_enabled = False
-            
+        # Use patch.object for proper test isolation
+        with patch.object(settings, "cache_enabled", False):
             # Reset the singleton
-            import src.cache as cache_module
             cache_module._cache_instance = None
             
             result = clear_cache()
             assert result is False
-        finally:
-            settings.cache_enabled = original_enabled
-            cache_module._cache_instance = None
+        
+        # Ensure singleton is reset after the test
+        cache_module._cache_instance = None
 
 
 class TestGraphCaching:
