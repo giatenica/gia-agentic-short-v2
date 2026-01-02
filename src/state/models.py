@@ -522,6 +522,68 @@ class Theme(BaseModel):
     source_count: int = Field(default=0, ge=0, description="Number of supporting sources")
 
 
+class LiteratureSynthesis(BaseModel):
+    """Synthesis of literature review findings."""
+    
+    synthesis_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique synthesis identifier"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp"
+    )
+    
+    # Core synthesis components
+    summary: str = Field(
+        default="",
+        description="Executive summary of the synthesis"
+    )
+    state_of_field: str = Field(
+        default="",
+        description="Description of the current state of the field"
+    )
+    full_synthesis: str = Field(
+        default="",
+        description="Full synthesis text"
+    )
+    
+    # Extracted insights
+    key_findings: list[str] = Field(
+        default_factory=list,
+        description="Key findings from the literature"
+    )
+    theoretical_frameworks: list[str] = Field(
+        default_factory=list,
+        description="Major theoretical frameworks identified"
+    )
+    methodological_approaches: list[str] = Field(
+        default_factory=list,
+        description="Common methodological approaches"
+    )
+    contribution_opportunities: list[str] = Field(
+        default_factory=list,
+        description="Opportunities for novel contributions"
+    )
+    
+    # Metrics
+    papers_analyzed: int = Field(
+        default=0,
+        ge=0,
+        description="Number of papers analyzed"
+    )
+    themes_identified: int = Field(
+        default=0,
+        ge=0,
+        description="Number of themes identified"
+    )
+    gaps_identified: int = Field(
+        default=0,
+        ge=0,
+        description="Number of research gaps identified"
+    )
+
+
 class AnalysisResult(BaseModel):
     """Results from the analysis phase."""
     
