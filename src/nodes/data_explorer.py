@@ -14,7 +14,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 
-from src.state.enums import ResearchStatus, DataQualityLevel
+from src.state.enums import ResearchStatus
 from src.state.models import (
     DataFile,
     DataExplorationResult,
@@ -47,7 +47,7 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
     if not uploaded_data:
         return {
             "status": ResearchStatus.DATA_EXPLORED,
-            "data_exploration": None,
+            "data_exploration_results": None,
             "messages": [AIMessage(
                 content="No data files uploaded. Proceeding without data exploration."
             )],
@@ -100,7 +100,7 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
     
     return {
         "status": status,
-        "data_exploration": primary_result,
+        "data_exploration_results": primary_result,
         "variable_mappings": variable_mappings,
         "errors": errors if errors else state.get("errors", []),
         "messages": [AIMessage(content=message)],
@@ -129,7 +129,6 @@ def map_variables_to_columns(
         List of VariableMapping objects.
     """
     mappings = []
-    column_names = [col.name.lower() for col in exploration.columns]
     
     for var in key_variables:
         var_lower = var.lower()

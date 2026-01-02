@@ -10,7 +10,6 @@ These tools are used by the DATA_EXPLORER node to:
 
 from pathlib import Path
 from typing import Any
-import json
 
 from langchain_core.tools import tool
 

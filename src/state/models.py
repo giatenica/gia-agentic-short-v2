@@ -11,9 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 from src.state.enums import (
-    ResearchStatus,
     CritiqueSeverity,
     EvidenceStrength,
     PaperType,

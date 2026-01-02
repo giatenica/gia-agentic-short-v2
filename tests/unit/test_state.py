@@ -1,7 +1,7 @@
 """Unit tests for state management module."""
 
 import pytest
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 from src.state.enums import (
@@ -18,24 +18,15 @@ from src.state.models import (
     IntakeFormData,
     DataFile,
     ColumnAnalysis,
-    QualityIssue,
     DataExplorationResult,
-    VariableMapping,
     ResearchPlan,
-    SearchQuery,
     SearchResult,
-    Finding,
-    Theme,
-    AnalysisResult,
-    DraftSection,
-    ResearchDraft,
     CritiqueItem,
     Critique,
     EvidenceItem,
     WorkflowError,
 )
 from src.state.schema import (
-    WorkflowState,
     create_initial_state,
     validate_state_for_node,
 )

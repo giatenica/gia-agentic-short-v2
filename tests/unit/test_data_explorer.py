@@ -4,14 +4,10 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from importlib.util import find_spec
 
 # Check if pandas is available
-try:
-    import pandas as pd
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
+HAS_PANDAS = find_spec("pandas") is not None
 
 from src.state.enums import ResearchStatus, DataQualityLevel, ColumnType
 from src.state.models import DataFile, DataExplorationResult, ColumnAnalysis
@@ -217,20 +213,20 @@ class TestDataExplorerNode:
         """Test node when no data files uploaded."""
         from src.nodes.data_explorer import data_explorer_node
         
-        state = create_initial_state("test")
+        state = create_initial_state()
         state["status"] = ResearchStatus.INTAKE_COMPLETE
         state["uploaded_data"] = []
         
         result = data_explorer_node(state)
         
         assert result["status"] == ResearchStatus.DATA_EXPLORED
-        assert result["data_exploration"] is None
+        assert result["data_exploration_results"] is None
     
     def test_node_with_data(self, sample_csv_file):
         """Test node with uploaded data."""
         from src.nodes.data_explorer import data_explorer_node
         
-        state = create_initial_state("test")
+        state = create_initial_state()
         state["status"] = ResearchStatus.INTAKE_COMPLETE
         state["uploaded_data"] = [
             DataFile(
@@ -245,14 +241,14 @@ class TestDataExplorerNode:
         result = data_explorer_node(state)
         
         assert result["status"] in [ResearchStatus.DATA_EXPLORED, ResearchStatus.DATA_QUALITY_ISSUES]
-        assert result["data_exploration"] is not None
+        assert result["data_exploration_results"] is not None
         assert len(result["variable_mappings"]) == 3
     
     def test_variable_mapping(self, sample_csv_file):
         """Test variable to column mapping."""
         from src.nodes.data_explorer import data_explorer_node
         
-        state = create_initial_state("test")
+        state = create_initial_state()
         state["status"] = ResearchStatus.INTAKE_COMPLETE
         state["uploaded_data"] = [
             DataFile(
@@ -338,7 +334,7 @@ class TestRouteAfterDataExplorer:
         """Test routing to end on failure."""
         from src.nodes.data_explorer import route_after_data_explorer
         
-        state = create_initial_state("test")
+        state = create_initial_state()
         state["status"] = ResearchStatus.FAILED
         
         route = route_after_data_explorer(state)
@@ -348,7 +344,7 @@ class TestRouteAfterDataExplorer:
         """Test routing to literature reviewer on success."""
         from src.nodes.data_explorer import route_after_data_explorer
         
-        state = create_initial_state("test")
+        state = create_initial_state()
         state["status"] = ResearchStatus.DATA_EXPLORED
         
         route = route_after_data_explorer(state)
