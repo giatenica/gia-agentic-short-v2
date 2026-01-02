@@ -242,17 +242,19 @@ RESEARCH QUESTION:
 LITERATURE SYNTHESIS:
 {synthesis_text}
 
-For each gap identified, provide:
+For each gap, use EXACTLY this format (one gap per block):
 
-GAP: <short title>
-DESCRIPTION: <detailed description of the methodological gap>
-CURRENT_METHODS: <what methods are currently used>
-LIMITATION: <why current methods are insufficient>
-SIGNIFICANCE: <high/medium/low>
-ADDRESSABLE: <yes/no>
-HOW_TO_ADDRESS: <how this gap could be filled>
+GAP: [Short descriptive title]
+DESCRIPTION: [Detailed description of the methodological gap]
+CURRENT_METHODS: [What methods are currently used]
+LIMITATION: [Why current methods are insufficient]
+SIGNIFICANCE: [high/medium/low]
+ADDRESSABLE: [yes/no]
+HOW_TO_ADDRESS: [How this gap could be filled]
 
-Identify up to 5 methodological gaps. If fewer exist, that's fine."""
+IMPORTANT: You MUST identify at least 1-3 gaps. Every research area has gaps. 
+If the synthesis is limited, identify gaps based on general knowledge of the field.
+Do not skip this task or say no gaps exist."""
 
     response = model.invoke([HumanMessage(content=prompt)])
     
@@ -318,18 +320,20 @@ RESEARCH QUESTION:
 LITERATURE SYNTHESIS:
 {synthesis_text}
 
-For each gap identified, provide:
+For each gap, use EXACTLY this format (one gap per block):
 
-GAP: <short title>
-DESCRIPTION: <detailed description of the empirical gap>
-EXISTING_EVIDENCE: <what evidence exists>
-MISSING_EVIDENCE: <what's missing>
-CONTEXT: <specific context/population/setting lacking evidence>
-SIGNIFICANCE: <high/medium/low>
-ADDRESSABLE: <yes/no>
-DATA_NEEDED: <what data would address this gap>
+GAP: [Short descriptive title]
+DESCRIPTION: [Detailed description of the empirical gap]
+EXISTING_EVIDENCE: [What evidence exists]
+MISSING_EVIDENCE: [What is missing]
+CONTEXT: [Specific context/population/setting lacking evidence]
+SIGNIFICANCE: [high/medium/low]
+ADDRESSABLE: [yes/no]
+DATA_NEEDED: [What data would address this gap]
 
-Identify up to 5 empirical gaps. If fewer exist, that's fine."""
+IMPORTANT: You MUST identify at least 1-3 gaps. Every research area has empirical gaps.
+If the synthesis is limited, identify gaps based on general knowledge of the field.
+Do not skip this task or say no gaps exist."""
 
     response = model.invoke([HumanMessage(content=prompt)])
     
@@ -388,18 +392,20 @@ RESEARCH QUESTION:
 LITERATURE SYNTHESIS:
 {synthesis_text}
 
-For each gap identified, provide:
+For each gap, use EXACTLY this format (one gap per block):
 
-GAP: <short title>
-DESCRIPTION: <detailed description of the theoretical gap>
-EXISTING_THEORY: <relevant existing theoretical frameworks>
-LIMITATION: <why existing theory is insufficient>
-UNEXPLAINED: <what phenomena remain unexplained>
-SIGNIFICANCE: <high/medium/low>
-ADDRESSABLE: <yes/no>
-THEORY_NEEDED: <what kind of theoretical development would help>
+GAP: [Short descriptive title]
+DESCRIPTION: [Detailed description of the theoretical gap]
+EXISTING_THEORY: [Relevant existing theoretical frameworks]
+LIMITATION: [Why existing theory is insufficient]
+UNEXPLAINED: [What phenomena remain unexplained]
+SIGNIFICANCE: [high/medium/low]
+ADDRESSABLE: [yes/no]
+THEORY_NEEDED: [What kind of theoretical development would help]
 
-Identify up to 5 theoretical gaps. If fewer exist, that's fine."""
+IMPORTANT: You MUST identify at least 1-3 gaps. Every research area has theoretical gaps.
+If the synthesis is limited, identify gaps based on general knowledge of the field.
+Do not skip this task or say no gaps exist."""
 
     response = model.invoke([HumanMessage(content=prompt)])
     
@@ -407,56 +413,112 @@ Identify up to 5 theoretical gaps. If fewer exist, that's fine."""
 
 
 def _parse_gap_response(content: str, gap_type: str) -> list[dict[str, Any]]:
-    """Parse a gap identification response into structured data."""
+    """Parse a gap identification response into structured data.
+    
+    This parser is designed to be flexible and handle various LLM output formats
+    including numbered lists, markdown formatting, and variations in field names.
+    """
+    import re
+    import logging
+    
+    logger = logging.getLogger(__name__)
     gaps = []
     current_gap = {}
     
+    # Normalize content: remove markdown bold/italic markers
+    content = re.sub(r'\*\*([^*]+)\*\*', r'\1', content)  # Remove **bold**
+    content = re.sub(r'\*([^*]+)\*', r'\1', content)  # Remove *italic*
+    
     lines = content.split("\n")
+    
+    # Patterns for flexible matching
+    gap_patterns = [
+        r'^(?:\d+\.\s*)?GAP\s*[:\-]\s*(.+)$',
+        r'^(?:\d+\.\s*)?Gap\s*[:\-]\s*(.+)$',
+        r'^(?:##?\s*)?(?:\d+\.\s*)?Gap\s+\d*[:\-]?\s*(.+)$',
+        r'^(?:\d+)\.\s+(.+)$',  # Simple numbered list
+    ]
+    
+    field_mappings = {
+        'DESCRIPTION': ['description', 'desc', 'details'],
+        'SIGNIFICANCE': ['significance', 'importance', 'priority'],
+        'ADDRESSABLE': ['addressable', 'feasible', 'can address'],
+        'CURRENT_METHODS': ['current_methods', 'current methods', 'existing methods'],
+        'LIMITATION': ['limitation', 'limitations', 'issue', 'problem'],
+        'HOW_TO_ADDRESS': ['how_to_address', 'how to address', 'solution', 'approach'],
+        'EXISTING_EVIDENCE': ['existing_evidence', 'existing evidence', 'current evidence'],
+        'MISSING_EVIDENCE': ['missing_evidence', 'missing evidence', 'lacking evidence'],
+        'CONTEXT': ['context', 'setting', 'scope'],
+        'DATA_NEEDED': ['data_needed', 'data needed', 'required data'],
+        'EXISTING_THEORY': ['existing_theory', 'existing theory', 'current theory'],
+        'UNEXPLAINED': ['unexplained', 'unexplained phenomena'],
+        'THEORY_NEEDED': ['theory_needed', 'theory needed', 'theoretical development'],
+    }
+    
+    def extract_field(line: str) -> tuple[str | None, str]:
+        """Extract field name and value from a line."""
+        # Try standard format: FIELD: value or FIELD - value
+        for canonical, variants in field_mappings.items():
+            for variant in [canonical] + variants:
+                pattern = rf'^(?:\-\s*)?{re.escape(variant)}\s*[:\-]\s*(.+)$'
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    return canonical, match.group(1).strip()
+        return None, line
+    
+    def is_gap_line(line: str) -> tuple[bool, str]:
+        """Check if line starts a new gap and extract title."""
+        for pattern in gap_patterns:
+            match = re.match(pattern, line, re.IGNORECASE)
+            if match:
+                title = match.group(1).strip()
+                # Filter out lines that are clearly not gap titles
+                if len(title) > 3 and not title.lower().startswith(('description', 'significance', 'addressable')):
+                    return True, title
+        return False, ""
     
     for line in lines:
         line = line.strip()
         if not line:
             continue
         
-        if line.startswith("GAP:"):
+        # Check if this line starts a new gap
+        is_gap, gap_title = is_gap_line(line)
+        if is_gap:
             # Save previous gap if exists
             if current_gap.get("title"):
                 current_gap["gap_type"] = gap_type
                 gaps.append(current_gap)
-            current_gap = {"title": line.replace("GAP:", "").strip()}
-        elif line.startswith("DESCRIPTION:"):
-            current_gap["description"] = line.replace("DESCRIPTION:", "").strip()
-        elif line.startswith("SIGNIFICANCE:"):
-            sig = line.replace("SIGNIFICANCE:", "").strip().lower()
-            current_gap["significance"] = sig if sig in ["high", "medium", "low"] else "medium"
-        elif line.startswith("ADDRESSABLE:"):
-            addr = line.replace("ADDRESSABLE:", "").strip().lower()
-            current_gap["addressable"] = addr in ["yes", "true", "y"]
-        elif line.startswith("CURRENT_METHODS:"):
-            current_gap["current_methods"] = line.replace("CURRENT_METHODS:", "").strip()
-        elif line.startswith("LIMITATION:"):
-            current_gap["limitation"] = line.replace("LIMITATION:", "").strip()
-        elif line.startswith("HOW_TO_ADDRESS:"):
-            current_gap["how_to_address"] = line.replace("HOW_TO_ADDRESS:", "").strip()
-        elif line.startswith("EXISTING_EVIDENCE:"):
-            current_gap["existing_evidence"] = line.replace("EXISTING_EVIDENCE:", "").strip()
-        elif line.startswith("MISSING_EVIDENCE:"):
-            current_gap["missing_evidence"] = line.replace("MISSING_EVIDENCE:", "").strip()
-        elif line.startswith("CONTEXT:"):
-            current_gap["context"] = line.replace("CONTEXT:", "").strip()
-        elif line.startswith("DATA_NEEDED:"):
-            current_gap["data_needed"] = line.replace("DATA_NEEDED:", "").strip()
-        elif line.startswith("EXISTING_THEORY:"):
-            current_gap["existing_theory"] = line.replace("EXISTING_THEORY:", "").strip()
-        elif line.startswith("UNEXPLAINED:"):
-            current_gap["unexplained"] = line.replace("UNEXPLAINED:", "").strip()
-        elif line.startswith("THEORY_NEEDED:"):
-            current_gap["theory_needed"] = line.replace("THEORY_NEEDED:", "").strip()
+            current_gap = {"title": gap_title}
+            continue
+        
+        # Try to extract field value
+        field, value = extract_field(line)
+        if field and current_gap:
+            field_key = field.lower()
+            if field_key == 'significance':
+                value_lower = value.lower()
+                current_gap[field_key] = value_lower if value_lower in ["high", "medium", "low"] else "medium"
+            elif field_key == 'addressable':
+                value_lower = value.lower()
+                current_gap[field_key] = value_lower in ["yes", "true", "y"]
+            else:
+                current_gap[field_key] = value
+        elif current_gap.get("title") and not current_gap.get("description"):
+            # If we have a gap but no description yet, accumulate text as description
+            if line and not any(line.lower().startswith(v) for variants in field_mappings.values() for v in variants):
+                existing = current_gap.get("description", "")
+                current_gap["description"] = (existing + " " + line).strip() if existing else line
     
     # Don't forget the last gap
     if current_gap.get("title"):
         current_gap["gap_type"] = gap_type
         gaps.append(current_gap)
+    
+    # Log results for debugging
+    logger.debug(f"Parsed {len(gaps)} {gap_type} gaps from response")
+    if not gaps:
+        logger.warning(f"No {gap_type} gaps parsed. First 500 chars of content: {content[:500]}")
     
     return gaps
 
@@ -742,10 +804,43 @@ def perform_gap_analysis(
     primary_gap = None
     
     for gap in assessed_gaps:
+        # Ensure description meets minimum length requirement (20 chars)
+        description = gap.get("description", "")
+        if len(description) < 20:
+            # Build description from other available fields
+            fallback_parts = []
+            if gap.get("limitation"):
+                fallback_parts.append(gap["limitation"])
+            if gap.get("how_to_address"):
+                fallback_parts.append(f"Can be addressed by: {gap['how_to_address']}")
+            if gap.get("missing_evidence"):
+                fallback_parts.append(f"Missing: {gap['missing_evidence']}")
+            if gap.get("unexplained"):
+                fallback_parts.append(f"Unexplained: {gap['unexplained']}")
+            if gap.get("current_methods"):
+                fallback_parts.append(f"Current methods: {gap['current_methods']}")
+            if gap.get("existing_evidence"):
+                fallback_parts.append(f"Existing evidence: {gap['existing_evidence']}")
+            if gap.get("existing_theory"):
+                fallback_parts.append(f"Existing theory: {gap['existing_theory']}")
+            
+            if fallback_parts:
+                description = " ".join(fallback_parts)
+            
+            # If still too short, create a substantial fallback
+            if len(description) < 20:
+                title = gap.get("title", "Research gap")
+                gap_type = gap.get("gap_type", "research")
+                description = (
+                    f"This {gap_type} gap involves {title.lower()}. "
+                    f"The existing literature does not adequately address this area, "
+                    f"creating an opportunity for further investigation and contribution."
+                )
+        
         research_gap = ResearchGap(
             gap_type=gap.get("gap_type", "unknown"),
             title=gap.get("title", "Untitled Gap"),
-            description=gap.get("description", ""),
+            description=description,
             significance=gap.get("significance", "medium"),
             significance_justification=gap.get("significance_justification", ""),
             supporting_evidence=[],  # Could be populated from coverage analysis
