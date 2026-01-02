@@ -15,7 +15,7 @@ from langgraph.graph import StateGraph, START, END
 
 from src.agents import create_react_agent, create_research_agent
 from src.state.schema import WorkflowState
-from src.state.enums import ResearchStatus
+from src.state.enums import ResearchStatus, MethodologyType
 from src.nodes import (
     intake_node,
     literature_reviewer_node,
@@ -24,6 +24,10 @@ from src.nodes import (
     route_after_gap_identifier,
     planner_node,
     route_after_planner,
+    data_analyst_node,
+    route_after_data_analyst,
+    conceptual_synthesizer_node,
+    route_after_conceptual_synthesizer,
 )
 
 # Create agent instances for Studio
@@ -74,36 +78,132 @@ def _route_after_gap_identifier(state: WorkflowState) -> Literal["planner", "__e
     return END
 
 
-def _route_after_planner(state: WorkflowState) -> Literal["__end__"]:
-    """Route after planner - currently end (Sprint 5 will add DATA_ANALYST/CONCEPTUAL_SYNTHESIZER)."""
-    # For now, always end after planner
-    # Sprint 5 will route to data_analyst or conceptual_synthesizer
-    return END
+# =============================================================================
+# Research Type Router (Sprint 5)
+# =============================================================================
+
+
+# Methodology types that indicate theoretical/conceptual research
+THEORETICAL_METHODOLOGIES = {
+    "analytical_model",
+    "simulation",
+    "conceptual_framework",
+    "systematic_review",
+    "meta_analysis",
+    "narrative_review",
+}
+
+
+def route_by_research_type(state: WorkflowState) -> Literal["data_analyst", "conceptual_synthesizer"]:
+    """
+    Route to appropriate analysis node based on research type.
+    
+    Routes to DATA_ANALYST if:
+    - Research type is empirical or mixed methods AND has data
+    - Methodology is quantitative
+    
+    Routes to CONCEPTUAL_SYNTHESIZER if:
+    - Research type is theoretical
+    - No data available
+    - Methodology is theoretical/conceptual
+    """
+    # Check if we have data from exploration
+    has_data = state.get("data_exploration_results") is not None
+    
+    # Get research type from state
+    research_type = state.get("research_type", "").lower()
+    
+    # Get methodology type from research plan
+    plan = state.get("research_plan")
+    methodology_type = None
+    if plan:
+        if isinstance(plan, dict):
+            methodology_type = plan.get("methodology_type", "")
+        elif hasattr(plan, "methodology_type"):
+            methodology_type = plan.methodology_type
+            if hasattr(methodology_type, "value"):
+                methodology_type = methodology_type.value
+    
+    # Route to conceptual synthesizer for theoretical work
+    if research_type in ["theoretical", "literature_review"]:
+        return "conceptual_synthesizer"
+    
+    # Route to conceptual synthesizer for theoretical methodologies
+    if methodology_type and str(methodology_type).lower() in THEORETICAL_METHODOLOGIES:
+        return "conceptual_synthesizer"
+    
+    # Route to data analyst if we have data and empirical research
+    if has_data and research_type in ["empirical", "mixed", "experimental", "case_study"]:
+        return "data_analyst"
+    
+    # Default: if no data, use conceptual synthesizer
+    if not has_data:
+        return "conceptual_synthesizer"
+    
+    # Default with data: use data analyst
+    return "data_analyst"
+
+
+def _route_after_planner(state: WorkflowState) -> Literal["data_analyst", "conceptual_synthesizer", "__end__"]:
+    """Route after planner to analysis nodes based on research type."""
+    if state.get("errors"):
+        return END
+    
+    # Check if plan is approved
+    plan = state.get("research_plan")
+    if not plan:
+        return END
+    
+    # Check approval status
+    approval_status = None
+    if isinstance(plan, dict):
+        approval_status = plan.get("approval_status", "pending")
+    elif hasattr(plan, "approval_status"):
+        approval_status = plan.approval_status
+        if hasattr(approval_status, "value"):
+            approval_status = approval_status.value
+    
+    # Only proceed if plan is approved
+    if approval_status == "rejected":
+        return END
+    
+    # Route based on research type
+    return route_by_research_type(state)
 
 
 def create_research_workflow() -> StateGraph:
     """
     Create the main research workflow graph.
     
-    Current implementation (Sprints 1-4):
-    INTAKE -> LITERATURE_REVIEWER -> LITERATURE_SYNTHESIZER -> GAP_IDENTIFIER -> PLANNER -> END
+    Current implementation (Sprints 1-5):
+    INTAKE -> LITERATURE_REVIEWER -> LITERATURE_SYNTHESIZER -> GAP_IDENTIFIER -> PLANNER
+        -> [route by research type] -> DATA_ANALYST or CONCEPTUAL_SYNTHESIZER -> END
     
     The GAP_IDENTIFIER node includes an interrupt() for human approval
     of the refined research question.
     
     The PLANNER node includes an interrupt() for human approval
     of the research methodology and plan.
+    
+    Sprint 5 adds:
+    - Research type routing after PLANNER
+    - DATA_ANALYST node for empirical research
+    - CONCEPTUAL_SYNTHESIZER node for theoretical research
     """
     workflow = StateGraph(WorkflowState)
     
-    # Add nodes
+    # Add nodes (Sprints 1-4)
     workflow.add_node("intake", intake_node)
     workflow.add_node("literature_reviewer", literature_reviewer_node)
     workflow.add_node("literature_synthesizer", literature_synthesizer_node)
     workflow.add_node("gap_identifier", gap_identifier_node)
     workflow.add_node("planner", planner_node)
     
-    # Add edges
+    # Add Sprint 5 nodes
+    workflow.add_node("data_analyst", data_analyst_node)
+    workflow.add_node("conceptual_synthesizer", conceptual_synthesizer_node)
+    
+    # Add edges (Sprints 1-4)
     workflow.add_edge(START, "intake")
     workflow.add_conditional_edges(
         "intake",
@@ -125,11 +225,17 @@ def create_research_workflow() -> StateGraph:
         _route_after_gap_identifier,
         ["planner", END]
     )
+    
+    # Sprint 5: Research type routing after PLANNER
     workflow.add_conditional_edges(
         "planner",
         _route_after_planner,
-        [END]
+        ["data_analyst", "conceptual_synthesizer", END]
     )
+    
+    # Sprint 5: Both analysis nodes lead to END (Sprint 6 will add WRITER)
+    workflow.add_edge("data_analyst", END)
+    workflow.add_edge("conceptual_synthesizer", END)
     
     return workflow.compile()
 

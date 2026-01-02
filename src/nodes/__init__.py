@@ -34,6 +34,14 @@ from src.nodes.planner import (
     planner_node,
     route_after_planner,
 )
+from src.nodes.data_analyst import (
+    data_analyst_node,
+    route_after_data_analyst,
+)
+from src.nodes.conceptual_synthesizer import (
+    conceptual_synthesizer_node,
+    route_after_conceptual_synthesizer,
+)
 
 __all__ = [
     # Intake node
@@ -70,4 +78,10 @@ __all__ = [
     # Planner node
     "planner_node",
     "route_after_planner",
+    # Data analyst node (Sprint 5)
+    "data_analyst_node",
+    "route_after_data_analyst",
+    # Conceptual synthesizer node (Sprint 5)
+    "conceptual_synthesizer_node",
+    "route_after_conceptual_synthesizer",
 ]

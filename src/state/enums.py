@@ -224,3 +224,88 @@ class PlanApprovalStatus(str, Enum):
     APPROVED = "approved"
     REVISION_REQUESTED = "revision_requested"
     REJECTED = "rejected"
+
+
+class FindingType(str, Enum):
+    """Types of research findings."""
+    
+    MAIN_RESULT = "main_result"      # Primary finding addressing research question
+    SUPPORTING = "supporting"        # Supporting evidence for main findings
+    UNEXPECTED = "unexpected"        # Unexpected or novel findings
+    NULL_RESULT = "null_result"      # No significant effect found
+    ROBUSTNESS = "robustness"        # Robustness check results
+    SENSITIVITY = "sensitivity"      # Sensitivity analysis results
+    EXPLORATORY = "exploratory"      # Exploratory analysis findings
+
+
+class AnalysisStatus(str, Enum):
+    """Status of analysis execution."""
+    
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETE = "complete"
+    FAILED = "failed"
+    PARTIAL = "partial"  # Some analyses complete, others failed
+
+
+class StatisticalTestType(str, Enum):
+    """Types of statistical tests."""
+    
+    # Parametric tests
+    T_TEST = "t_test"
+    PAIRED_T_TEST = "paired_t_test"
+    ANOVA = "anova"
+    F_TEST = "f_test"
+    
+    # Non-parametric tests
+    WILCOXON = "wilcoxon"
+    MANN_WHITNEY = "mann_whitney"
+    KRUSKAL_WALLIS = "kruskal_wallis"
+    CHI_SQUARE = "chi_square"
+    
+    # Correlation tests
+    PEARSON = "pearson"
+    SPEARMAN = "spearman"
+    KENDALL = "kendall"
+    
+    # Regression diagnostics
+    HETEROSKEDASTICITY = "heteroskedasticity"
+    AUTOCORRELATION = "autocorrelation"
+    NORMALITY = "normality"
+    
+    # Other
+    OTHER = "other"
+
+
+class ConceptType(str, Enum):
+    """Types of theoretical concepts."""
+    
+    CONSTRUCT = "construct"          # Theoretical construct
+    VARIABLE = "variable"            # Measurable variable
+    MECHANISM = "mechanism"          # Causal mechanism
+    MODERATOR = "moderator"          # Moderating factor
+    MEDIATOR = "mediator"            # Mediating factor
+    BOUNDARY_CONDITION = "boundary_condition"  # Scope condition
+    OUTCOME = "outcome"              # Dependent/outcome concept
+
+
+class RelationshipType(str, Enum):
+    """Types of conceptual relationships."""
+    
+    CAUSAL = "causal"                # X causes Y
+    CORRELATIONAL = "correlational"  # X correlates with Y
+    MODERATING = "moderating"        # X moderates Y-Z relationship
+    MEDIATING = "mediating"          # X mediates Y-Z relationship
+    CONDITIONAL = "conditional"      # X depends on condition
+    RECIPROCAL = "reciprocal"        # X and Y mutually influence
+    HIERARCHICAL = "hierarchical"    # X is higher-order than Y
+
+
+class PropositionStatus(str, Enum):
+    """Status of theoretical propositions."""
+    
+    PROPOSED = "proposed"            # Newly proposed
+    SUPPORTED = "supported"          # Has empirical support
+    PARTIALLY_SUPPORTED = "partially_supported"
+    UNTESTED = "untested"            # Not yet tested
+    REJECTED = "rejected"            # Empirically rejected
