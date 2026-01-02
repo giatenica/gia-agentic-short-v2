@@ -32,6 +32,35 @@ from src.tools.citation_analysis import (
     calculate_citation_metrics,
     CITATION_ANALYSIS_TOOLS,
 )
+from src.tools.gap_analysis import (
+    compare_coverage,
+    identify_methodological_gaps,
+    identify_empirical_gaps,
+    identify_theoretical_gaps,
+    assess_gap_significance,
+    perform_gap_analysis,
+    compare_coverage_tool,
+    identify_gaps_tool,
+)
+from src.tools.contribution import (
+    generate_contribution_statement,
+    position_in_literature,
+    differentiate_from_prior,
+    refine_research_question,
+    generate_contribution_tool,
+    refine_question_tool,
+)
+
+# Tool collections
+GAP_ANALYSIS_TOOLS = [
+    compare_coverage_tool,
+    identify_gaps_tool,
+]
+
+CONTRIBUTION_TOOLS = [
+    generate_contribution_tool,
+    refine_question_tool,
+]
 
 __all__ = [
     # Search tools
@@ -67,4 +96,22 @@ __all__ = [
     "find_common_citations",
     "calculate_citation_metrics",
     "CITATION_ANALYSIS_TOOLS",
+    # Gap analysis tools
+    "compare_coverage",
+    "identify_methodological_gaps",
+    "identify_empirical_gaps",
+    "identify_theoretical_gaps",
+    "assess_gap_significance",
+    "perform_gap_analysis",
+    "compare_coverage_tool",
+    "identify_gaps_tool",
+    "GAP_ANALYSIS_TOOLS",
+    # Contribution tools
+    "generate_contribution_statement",
+    "position_in_literature",
+    "differentiate_from_prior",
+    "refine_research_question",
+    "generate_contribution_tool",
+    "refine_question_tool",
+    "CONTRIBUTION_TOOLS",
 ]

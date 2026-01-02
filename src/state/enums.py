@@ -127,3 +127,22 @@ class ColumnType(str, Enum):
     BOOLEAN = "boolean"
     IDENTIFIER = "identifier"  # IDs, codes
     UNKNOWN = "unknown"
+
+
+class GapType(str, Enum):
+    """Types of research gaps identified in literature."""
+    
+    METHODOLOGICAL = "methodological"  # New methods or approaches needed
+    EMPIRICAL = "empirical"            # Untested contexts, populations, or settings
+    THEORETICAL = "theoretical"        # Unexplained phenomena, missing frameworks
+    CONTEXTUAL = "contextual"          # Not tested in specific context/region
+    TEMPORAL = "temporal"              # Not studied in recent time periods
+    CONFLICTING = "conflicting"        # Contradictory findings need resolution
+
+
+class GapSignificance(str, Enum):
+    """Significance level of identified research gaps."""
+    
+    HIGH = "high"        # Major gap with strong potential impact
+    MEDIUM = "medium"    # Notable gap worth addressing
+    LOW = "low"          # Minor gap, incremental contribution

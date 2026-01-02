@@ -13,10 +13,22 @@ from src.nodes.literature_reviewer import (
 from src.nodes.literature_synthesizer import (
     literature_synthesizer_node,
     extract_themes,
-    identify_gaps,
+    identify_gaps as synthesizer_identify_gaps,
     synthesize_literature,
-    generate_contribution_statement,
-    refine_research_question,
+    generate_contribution_statement as synthesizer_generate_contribution,
+    refine_research_question as synthesizer_refine_question,
+)
+from src.nodes.gap_identifier import (
+    gap_identifier_node,
+    identify_gaps,
+    select_primary_gap,
+    create_refined_question,
+    create_contribution_statement,
+    prepare_approval_request,
+    process_approval_response,
+    should_refine_further,
+    route_after_gap_identifier,
+    get_gap_identifier_tools,
 )
 
 __all__ = [
@@ -36,8 +48,19 @@ __all__ = [
     # Literature synthesizer node
     "literature_synthesizer_node",
     "extract_themes",
-    "identify_gaps",
+    "synthesizer_identify_gaps",
     "synthesize_literature",
-    "generate_contribution_statement",
-    "refine_research_question",
+    "synthesizer_generate_contribution",
+    "synthesizer_refine_question",
+    # Gap identifier node
+    "gap_identifier_node",
+    "identify_gaps",
+    "select_primary_gap",
+    "create_refined_question",
+    "create_contribution_statement",
+    "prepare_approval_request",
+    "process_approval_response",
+    "should_refine_further",
+    "route_after_gap_identifier",
+    "get_gap_identifier_tools",
 ]
