@@ -1231,12 +1231,12 @@ After planning, the workflow routes to one of two nodes based on research type:
    - `map_concept_relationships` - Concept mapping
 
 #### Acceptance Criteria
-- [ ] Research type routing works correctly
-- [ ] Data analysis follows methodology from plan
-- [ ] Findings link to research question
-- [ ] Conceptual framework is grounded in literature
-- [ ] Propositions are logically derived
-- [ ] Gap coverage is assessed
+- [x] Research type routing works correctly
+- [x] Data analysis follows methodology from plan
+- [x] Findings link to research question
+- [x] Conceptual framework is grounded in literature
+- [x] Propositions are logically derived
+- [x] Gap coverage is assessed
 
 ---
 
@@ -1328,14 +1328,14 @@ Writing in academic research is not mere reporting; it is argument construction.
    ```
 
 #### Acceptance Criteria
-- [ ] Each section serves its rhetorical purpose
-- [ ] Claims are backed by evidence or citations
-- [ ] Argument flows logically across sections
-- [ ] Contribution promised in intro is delivered in conclusion
-- [ ] Banned words are filtered per `docs/writing_style_guide.md`
-- [ ] Style matches target journal (RFS, JFE, JF, JFQA conventions)
-- [ ] Citations follow Chicago Author-Date format
-- [ ] Hedging language used appropriately for claims
+- [x] Each section serves its rhetorical purpose
+- [x] Claims are backed by evidence or citations
+- [x] Argument flows logically across sections
+- [x] Contribution promised in intro is delivered in conclusion
+- [x] Banned words are filtered per `docs/writing_style_guide.md`
+- [x] Style matches target journal (RFS, JFE, JF, JFQA conventions)
+- [x] Citations follow Chicago Author-Date format
+- [x] Hedging language used appropriately for claims
 
 ---
 

@@ -8,6 +8,12 @@ from src.state.enums import (
     ResearchType,
     GapType,
     GapSignificance,
+    # Sprint 6 enums
+    SectionType,
+    WritingStatus,
+    StyleViolationType,
+    CitationStyle,
+    JournalTarget,
 )
 from src.state.models import (
     IntakeFormData,
@@ -33,6 +39,16 @@ from src.state.models import (
     Critique,
     EvidenceItem,
     WorkflowError,
+    # Sprint 6 models
+    StyleViolation,
+    CitationEntry,
+    ReferenceList,
+    PaperSection,
+    ArgumentThread,
+    WriterOutput,
+    SectionWritingContext,
+    SECTION_WORD_COUNTS,
+    get_section_word_count_target,
 )
 from src.state.schema import WorkflowState
 
@@ -45,6 +61,12 @@ __all__ = [
     "ResearchType",
     "GapType",
     "GapSignificance",
+    # Sprint 6 enums
+    "SectionType",
+    "WritingStatus",
+    "StyleViolationType",
+    "CitationStyle",
+    "JournalTarget",
     # Models
     "IntakeFormData",
     "DataFile",
@@ -69,6 +91,16 @@ __all__ = [
     "Critique",
     "EvidenceItem",
     "WorkflowError",
+    # Sprint 6 models
+    "StyleViolation",
+    "CitationEntry",
+    "ReferenceList",
+    "PaperSection",
+    "ArgumentThread",
+    "WriterOutput",
+    "SectionWritingContext",
+    "SECTION_WORD_COUNTS",
+    "get_section_word_count_target",
     # Schema
     "WorkflowState",
 ]

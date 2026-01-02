@@ -25,6 +25,11 @@ from src.state.models import (
     GapAnalysis,
     ContributionStatement,
     RefinedResearchQuestion,
+    # Sprint 6 models
+    WriterOutput,
+    PaperSection,
+    ReferenceList,
+    StyleViolation,
 )
 from src.state.enums import ResearchStatus
 
@@ -161,6 +166,21 @@ class WorkflowState(TypedDict, total=False):
     # Current draft from WRITER node
     draft: ResearchDraft | None
     
+    # Writer output from Sprint 6 WRITER node
+    writer_output: WriterOutput | dict[str, Any] | None
+    
+    # Sections to write (determined by writer node)
+    sections_to_write: list[str]
+    
+    # Completed sections from section writers
+    completed_sections: list[PaperSection]
+    
+    # Reference list
+    reference_list: ReferenceList | dict[str, Any] | None
+    
+    # Style violations collected during writing
+    style_violations: list[StyleViolation]
+    
     # Critique from REVIEWER node
     critique: Critique | None
     
@@ -260,6 +280,11 @@ def create_initial_state(
         
         # Draft
         "draft": None,
+        "writer_output": None,
+        "sections_to_write": [],
+        "completed_sections": [],
+        "reference_list": None,
+        "style_violations": [],
         "critique": None,
         
         # Metadata

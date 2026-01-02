@@ -28,6 +28,7 @@ from src.nodes import (
     route_after_data_analyst,
     conceptual_synthesizer_node,
     route_after_conceptual_synthesizer,
+    writer_node,
 )
 
 # Create agent instances for Studio
@@ -171,13 +172,40 @@ def _route_after_planner(state: WorkflowState) -> Literal["data_analyst", "conce
     return route_by_research_type(state)
 
 
+# =============================================================================
+# Analysis to Writer Routing (Sprint 6)
+# =============================================================================
+
+
+def route_after_analysis(state: WorkflowState) -> Literal["writer", "__end__"]:
+    """
+    Route from analysis nodes to writer.
+    
+    Proceeds to writer if:
+    - No errors in state
+    - Analysis output exists (data_analyst_output or conceptual_synthesis_output)
+    """
+    if state.get("errors"):
+        return END
+    
+    # Check for analysis completion
+    has_data_analysis = state.get("data_analyst_output") is not None
+    has_conceptual_synthesis = state.get("conceptual_synthesis_output") is not None
+    
+    if has_data_analysis or has_conceptual_synthesis:
+        return "writer"
+    
+    return END
+
+
 def create_research_workflow() -> StateGraph:
     """
     Create the main research workflow graph.
     
-    Current implementation (Sprints 1-5):
+    Current implementation (Sprints 1-6):
     INTAKE -> LITERATURE_REVIEWER -> LITERATURE_SYNTHESIZER -> GAP_IDENTIFIER -> PLANNER
-        -> [route by research type] -> DATA_ANALYST or CONCEPTUAL_SYNTHESIZER -> END
+        -> [route by research type] -> DATA_ANALYST or CONCEPTUAL_SYNTHESIZER 
+        -> WRITER -> END
     
     The GAP_IDENTIFIER node includes an interrupt() for human approval
     of the refined research question.
@@ -189,6 +217,11 @@ def create_research_workflow() -> StateGraph:
     - Research type routing after PLANNER
     - DATA_ANALYST node for empirical research
     - CONCEPTUAL_SYNTHESIZER node for theoretical research
+    
+    Sprint 6 adds:
+    - WRITER node for paper composition
+    - Section writers for each paper component
+    - Style enforcement and citation management
     """
     workflow = StateGraph(WorkflowState)
     
@@ -202,6 +235,9 @@ def create_research_workflow() -> StateGraph:
     # Add Sprint 5 nodes
     workflow.add_node("data_analyst", data_analyst_node)
     workflow.add_node("conceptual_synthesizer", conceptual_synthesizer_node)
+    
+    # Add Sprint 6 nodes
+    workflow.add_node("writer", writer_node)
     
     # Add edges (Sprints 1-4)
     workflow.add_edge(START, "intake")
@@ -233,9 +269,20 @@ def create_research_workflow() -> StateGraph:
         ["data_analyst", "conceptual_synthesizer", END]
     )
     
-    # Sprint 5: Both analysis nodes lead to END (Sprint 6 will add WRITER)
-    workflow.add_edge("data_analyst", END)
-    workflow.add_edge("conceptual_synthesizer", END)
+    # Sprint 6: Analysis nodes route to WRITER
+    workflow.add_conditional_edges(
+        "data_analyst",
+        route_after_analysis,
+        ["writer", END]
+    )
+    workflow.add_conditional_edges(
+        "conceptual_synthesizer",
+        route_after_analysis,
+        ["writer", END]
+    )
+    
+    # Sprint 6: WRITER leads to END
+    workflow.add_edge("writer", END)
     
     return workflow.compile()
 

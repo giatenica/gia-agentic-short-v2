@@ -1965,7 +1965,7 @@ class WorkflowError(BaseModel):
         description="Unique error identifier"
     )
     occurred_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the error occurred"
     )
     node: str = Field(..., description="Node where error occurred")
@@ -1979,3 +1979,564 @@ class WorkflowError(BaseModel):
         default_factory=dict,
         description="Additional error details"
     )
+
+
+# =============================================================================
+# Sprint 6: WRITER Node Models
+# =============================================================================
+
+
+class StyleViolation(BaseModel):
+    """A style guide violation detected in text."""
+    
+    violation_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique violation identifier"
+    )
+    violation_type: str = Field(
+        ...,
+        description="Type of violation (banned_word, informal_tone, etc.)"
+    )
+    severity: CritiqueSeverity = Field(
+        default=CritiqueSeverity.MINOR,
+        description="Severity of the violation"
+    )
+    location: str = Field(
+        default="",
+        description="Location in text (e.g., 'paragraph 2, sentence 3')"
+    )
+    original_text: str = Field(
+        ...,
+        description="The problematic text"
+    )
+    suggestion: str = Field(
+        default="",
+        description="Suggested replacement or fix"
+    )
+    rule_reference: str = Field(
+        default="",
+        description="Reference to style guide section"
+    )
+    auto_fixable: bool = Field(
+        default=False,
+        description="Whether this violation can be auto-fixed"
+    )
+
+
+class CitationEntry(BaseModel):
+    """A citation entry for the reference list."""
+    
+    key: str = Field(
+        ...,
+        description="Citation key (e.g., 'Fama1970')"
+    )
+    authors: list[str] = Field(
+        ...,
+        description="List of author names"
+    )
+    year: int = Field(
+        ...,
+        ge=1900,
+        le=2100,
+        description="Publication year"
+    )
+    title: str = Field(
+        ...,
+        description="Title of the work"
+    )
+    journal: str | None = Field(
+        default=None,
+        description="Journal name"
+    )
+    volume: str | None = Field(
+        default=None,
+        description="Volume number"
+    )
+    issue: str | None = Field(
+        default=None,
+        description="Issue number"
+    )
+    pages: str | None = Field(
+        default=None,
+        description="Page range (e.g., '3-56')"
+    )
+    doi: str | None = Field(
+        default=None,
+        description="DOI identifier"
+    )
+    url: str | None = Field(
+        default=None,
+        description="URL for online sources"
+    )
+    publisher: str | None = Field(
+        default=None,
+        description="Publisher name (for books)"
+    )
+    source_type: str = Field(
+        default="journal",
+        description="Type: journal, book, chapter, working_paper, etc."
+    )
+    
+    def format_chicago_author_date(self) -> str:
+        """Format citation in Chicago Author-Date style for reference list."""
+        # Format authors
+        if len(self.authors) == 1:
+            author_str = self.authors[0]
+        elif len(self.authors) == 2:
+            author_str = f"{self.authors[0]}, and {self.authors[1]}"
+        else:
+            author_str = f"{self.authors[0]}, {', '.join(self.authors[1:-1])}, and {self.authors[-1]}"
+        
+        # Base format
+        ref = f'{author_str}. {self.year}. "{self.title}."'
+        
+        # Add journal info
+        if self.journal:
+            ref += f" {self.journal}"
+            if self.volume:
+                ref += f" {self.volume}"
+                if self.issue:
+                    ref += f" ({self.issue})"
+            if self.pages:
+                ref += f": {self.pages}"
+            ref += "."
+        elif self.publisher:
+            ref += f" {self.publisher}."
+        
+        return ref
+    
+    def format_inline(self, include_page: str | None = None) -> str:
+        """Format inline citation in Chicago Author-Date style."""
+        # Get last name of first author
+        first_author = self.authors[0].split(",")[0] if "," in self.authors[0] else self.authors[0].split()[-1]
+        
+        if len(self.authors) == 1:
+            citation = f"({first_author} {self.year}"
+        elif len(self.authors) == 2:
+            second_author = self.authors[1].split(",")[0] if "," in self.authors[1] else self.authors[1].split()[-1]
+            citation = f"({first_author} and {second_author} {self.year}"
+        else:
+            citation = f"({first_author} et al. {self.year}"
+        
+        if include_page:
+            citation += f", {include_page}"
+        
+        citation += ")"
+        return citation
+
+
+class ReferenceList(BaseModel):
+    """Complete reference list for a paper."""
+    
+    entries: list[CitationEntry] = Field(
+        default_factory=list,
+        description="List of citation entries"
+    )
+    format_style: str = Field(
+        default="chicago_author_date",
+        description="Citation format style"
+    )
+    
+    def add_entry(self, entry: CitationEntry) -> None:
+        """Add a citation entry if not already present."""
+        if not any(e.key == entry.key for e in self.entries):
+            self.entries.append(entry)
+    
+    def get_entry(self, key: str) -> CitationEntry | None:
+        """Get a citation entry by key."""
+        for entry in self.entries:
+            if entry.key == key:
+                return entry
+        return None
+    
+    def format_reference_list(self) -> str:
+        """Format the complete reference list."""
+        # Sort by first author's last name, then by year
+        sorted_entries = sorted(
+            self.entries,
+            key=lambda e: (e.authors[0].split(",")[0] if "," in e.authors[0] else e.authors[0].split()[-1], e.year)
+        )
+        
+        lines = []
+        for entry in sorted_entries:
+            lines.append(entry.format_chicago_author_date())
+        
+        return "\n\n".join(lines)
+    
+    @property
+    def entry_count(self) -> int:
+        """Number of entries in the reference list."""
+        return len(self.entries)
+
+
+class PaperSection(BaseModel):
+    """A section of an academic paper."""
+    
+    section_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique section identifier"
+    )
+    section_type: str = Field(
+        ...,
+        description="Type of section (introduction, methods, results, etc.)"
+    )
+    title: str = Field(
+        ...,
+        description="Section title"
+    )
+    content: str = Field(
+        default="",
+        description="Section content"
+    )
+    order: int = Field(
+        default=0,
+        ge=0,
+        description="Order in the paper"
+    )
+    word_count: int = Field(
+        default=0,
+        ge=0,
+        description="Word count"
+    )
+    target_word_count: int | None = Field(
+        default=None,
+        description="Target word count for this section"
+    )
+    citations_used: list[str] = Field(
+        default_factory=list,
+        description="Citation keys used in this section"
+    )
+    status: str = Field(
+        default="pending",
+        description="Writing status"
+    )
+    style_violations: list[StyleViolation] = Field(
+        default_factory=list,
+        description="Style violations in this section"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="When section was created"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="When section was last updated"
+    )
+    
+    def update_word_count(self) -> int:
+        """Update and return word count from content."""
+        self.word_count = len(self.content.split()) if self.content else 0
+        return self.word_count
+    
+    def is_within_target(self, tolerance: float = 0.2) -> bool:
+        """Check if word count is within tolerance of target."""
+        if not self.target_word_count:
+            return True
+        lower = self.target_word_count * (1 - tolerance)
+        upper = self.target_word_count * (1 + tolerance)
+        return lower <= self.word_count <= upper
+
+
+class ArgumentThread(BaseModel):
+    """Tracks the logical argument thread across sections."""
+    
+    thread_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique thread identifier"
+    )
+    
+    # Claims and evidence tracking
+    main_thesis: str = Field(
+        default="",
+        description="The paper's main thesis/argument"
+    )
+    claims: list[str] = Field(
+        default_factory=list,
+        description="Key claims made in the paper"
+    )
+    evidence_map: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Mapping of claims to supporting evidence"
+    )
+    
+    # Coherence tracking
+    section_connections: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="How sections connect (from, to, connection_type)"
+    )
+    
+    # Promise tracking
+    promised_contribution: str = Field(
+        default="",
+        description="Contribution promised in introduction"
+    )
+    delivered_contribution: str = Field(
+        default="",
+        description="Contribution delivered in conclusion"
+    )
+    
+    # Scoring
+    coherence_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Overall coherence score"
+    )
+    unsupported_claims: list[str] = Field(
+        default_factory=list,
+        description="Claims without adequate evidence"
+    )
+    
+    def add_claim(self, claim: str, evidence: list[str] | None = None) -> None:
+        """Add a claim with optional evidence."""
+        if claim not in self.claims:
+            self.claims.append(claim)
+        if evidence:
+            self.evidence_map[claim] = evidence
+    
+    def check_claim_support(self) -> list[str]:
+        """Return list of unsupported claims."""
+        unsupported = []
+        for claim in self.claims:
+            if claim not in self.evidence_map or not self.evidence_map[claim]:
+                unsupported.append(claim)
+        self.unsupported_claims = unsupported
+        return unsupported
+    
+    def contribution_delivered(self) -> bool:
+        """Check if promised contribution is delivered."""
+        if not self.promised_contribution or not self.delivered_contribution:
+            return False
+        # Simple check: delivered should address promised
+        return len(self.delivered_contribution) > 0
+
+
+class WriterOutput(BaseModel):
+    """Complete output from the WRITER node."""
+    
+    output_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique output identifier"
+    )
+    
+    # Paper content
+    title: str = Field(
+        default="",
+        description="Paper title"
+    )
+    sections: list[PaperSection] = Field(
+        default_factory=list,
+        description="All paper sections"
+    )
+    reference_list: ReferenceList = Field(
+        default_factory=ReferenceList,
+        description="Complete reference list"
+    )
+    
+    # Argument tracking
+    argument_thread: ArgumentThread = Field(
+        default_factory=ArgumentThread,
+        description="Argument coherence tracking"
+    )
+    
+    # Quality metrics
+    total_word_count: int = Field(
+        default=0,
+        ge=0,
+        description="Total word count"
+    )
+    target_word_count: int | None = Field(
+        default=None,
+        description="Target total word count"
+    )
+    style_violations: list[StyleViolation] = Field(
+        default_factory=list,
+        description="All style violations across sections"
+    )
+    
+    # Status
+    writing_status: str = Field(
+        default="pending",
+        description="Overall writing status"
+    )
+    contribution_delivered: bool = Field(
+        default=False,
+        description="Whether promised contribution is delivered"
+    )
+    
+    # Timestamps
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="When writing started"
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        description="When writing completed"
+    )
+    
+    def get_section(self, section_type: str) -> PaperSection | None:
+        """Get a section by type."""
+        for section in self.sections:
+            if section.section_type == section_type:
+                return section
+        return None
+    
+    def update_total_word_count(self) -> int:
+        """Update and return total word count."""
+        self.total_word_count = sum(s.word_count for s in self.sections)
+        return self.total_word_count
+    
+    def collect_style_violations(self) -> list[StyleViolation]:
+        """Collect all style violations from all sections."""
+        violations = []
+        for section in self.sections:
+            violations.extend(section.style_violations)
+        self.style_violations = violations
+        return violations
+    
+    def collect_citations(self) -> list[str]:
+        """Collect all citation keys used across sections."""
+        citations = set()
+        for section in self.sections:
+            citations.update(section.citations_used)
+        return list(citations)
+    
+    def is_complete(self) -> bool:
+        """Check if all sections are finalized."""
+        return all(s.status == "finalized" for s in self.sections)
+    
+    def get_abstract(self) -> str:
+        """Get abstract content."""
+        abstract = self.get_section("abstract")
+        return abstract.content if abstract else ""
+    
+    def to_markdown(self) -> str:
+        """Export paper as markdown."""
+        lines = [f"# {self.title}", ""]
+        
+        # Add sections in order
+        for section in sorted(self.sections, key=lambda s: s.order):
+            if section.section_type != "references":
+                lines.append(f"## {section.title}")
+                lines.append("")
+                lines.append(section.content)
+                lines.append("")
+        
+        # Add references
+        lines.append("## References")
+        lines.append("")
+        lines.append(self.reference_list.format_reference_list())
+        
+        return "\n".join(lines)
+
+
+# =============================================================================
+# Section Writing Context Models
+# =============================================================================
+
+
+class SectionWritingContext(BaseModel):
+    """Context passed to a section writer."""
+    
+    section_type: str = Field(
+        ...,
+        description="Type of section to write"
+    )
+    target_journal: str = Field(
+        default="generic",
+        description="Target journal"
+    )
+    paper_type: str = Field(
+        default="short_article",
+        description="Type of paper"
+    )
+    research_type: str = Field(
+        default="empirical",
+        description="Research methodology type"
+    )
+    
+    # Content from prior nodes
+    research_question: str = Field(
+        default="",
+        description="The research question"
+    )
+    contribution_statement: str = Field(
+        default="",
+        description="The contribution statement"
+    )
+    gap_analysis_summary: str = Field(
+        default="",
+        description="Summary of identified gaps"
+    )
+    literature_synthesis_summary: str = Field(
+        default="",
+        description="Summary of literature synthesis"
+    )
+    methodology_summary: str = Field(
+        default="",
+        description="Summary of methodology"
+    )
+    findings_summary: str = Field(
+        default="",
+        description="Summary of findings/results"
+    )
+    
+    # Available data for results section
+    has_quantitative_results: bool = Field(
+        default=False,
+        description="Whether quantitative results are available"
+    )
+    has_qualitative_results: bool = Field(
+        default=False,
+        description="Whether qualitative results are available"
+    )
+    
+    # Word count targets
+    target_word_count: int | None = Field(
+        default=None,
+        description="Target word count for this section"
+    )
+    
+    # Available citations
+    available_citations: list[CitationEntry] = Field(
+        default_factory=list,
+        description="Citations available for use"
+    )
+    
+    # Prior sections (for coherence)
+    prior_sections: list[PaperSection] = Field(
+        default_factory=list,
+        description="Sections written before this one"
+    )
+
+
+# Word count targets for different paper types and sections
+SECTION_WORD_COUNTS = {
+    "short_article": {
+        "abstract": (50, 75),
+        "introduction": (500, 800),
+        "literature_review": (0, 0),  # Integrated in introduction for short papers
+        "methods": (400, 700),
+        "data": (200, 400),
+        "results": (800, 1200),
+        "discussion": (300, 500),
+        "conclusion": (200, 400),
+    },
+    "full_paper": {
+        "abstract": (75, 100),
+        "introduction": (1000, 1500),
+        "literature_review": (1500, 2500),
+        "methods": (1000, 1500),
+        "data": (500, 800),
+        "results": (2000, 3000),
+        "discussion": (1000, 1500),
+        "conclusion": (400, 600),
+    },
+}
+
+
+def get_section_word_count_target(paper_type: str, section_type: str) -> tuple[int, int] | None:
+    """Get word count target range for a section type."""
+    if paper_type in SECTION_WORD_COUNTS:
+        return SECTION_WORD_COUNTS[paper_type].get(section_type)
+    return None
