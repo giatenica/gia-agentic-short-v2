@@ -309,3 +309,69 @@ class PropositionStatus(str, Enum):
     PARTIALLY_SUPPORTED = "partially_supported"
     UNTESTED = "untested"            # Not yet tested
     REJECTED = "rejected"            # Empirically rejected
+
+
+# =============================================================================
+# Sprint 6: WRITER Node Enums
+# =============================================================================
+
+
+class SectionType(str, Enum):
+    """Types of paper sections."""
+    
+    ABSTRACT = "abstract"
+    INTRODUCTION = "introduction"
+    LITERATURE_REVIEW = "literature_review"
+    METHODS = "methods"
+    DATA = "data"
+    RESULTS = "results"
+    DISCUSSION = "discussion"
+    CONCLUSION = "conclusion"
+    APPENDIX = "appendix"
+    REFERENCES = "references"
+
+
+class WritingStatus(str, Enum):
+    """Status of section writing."""
+    
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DRAFT_COMPLETE = "draft_complete"
+    STYLE_CHECKED = "style_checked"
+    CITATIONS_VERIFIED = "citations_verified"
+    FINALIZED = "finalized"
+
+
+class StyleViolationType(str, Enum):
+    """Types of style guide violations."""
+    
+    BANNED_WORD = "banned_word"
+    INFORMAL_TONE = "informal_tone"
+    MISSING_HEDGE = "missing_hedge"
+    VAGUE_TERM = "vague_term"
+    CITATION_FORMAT = "citation_format"
+    OVERCLAIM = "overclaim"
+    JOURNAL_MISMATCH = "journal_mismatch"
+    CONTRACTION = "contraction"
+    PASSIVE_VOICE_OVERUSE = "passive_voice_overuse"
+    WORD_COUNT_VIOLATION = "word_count_violation"
+
+
+class CitationStyle(str, Enum):
+    """Citation formatting styles."""
+    
+    CHICAGO_AUTHOR_DATE = "chicago_author_date"
+    APA = "apa"
+    MLA = "mla"
+    HARVARD = "harvard"
+
+
+class JournalTarget(str, Enum):
+    """Target academic journals with specific style requirements."""
+    
+    RFS = "rfs"              # Review of Financial Studies
+    JFE = "jfe"              # Journal of Financial Economics
+    JF = "jf"                # Journal of Finance
+    JFQA = "jfqa"            # Journal of Financial and Quantitative Analysis
+    MANAGEMENT_SCIENCE = "management_science"
+    GENERIC = "generic"      # Generic academic style

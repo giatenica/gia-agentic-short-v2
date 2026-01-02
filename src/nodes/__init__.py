@@ -42,6 +42,13 @@ from src.nodes.conceptual_synthesizer import (
     conceptual_synthesizer_node,
     route_after_conceptual_synthesizer,
 )
+from src.nodes.writer import (
+    writer_node,
+    should_continue_writing,
+    get_section_writer,
+    build_section_context,
+    SECTION_ORDER,
+)
 
 __all__ = [
     # Intake node
@@ -84,4 +91,10 @@ __all__ = [
     # Conceptual synthesizer node (Sprint 5)
     "conceptual_synthesizer_node",
     "route_after_conceptual_synthesizer",
+    # Writer node (Sprint 6)
+    "writer_node",
+    "should_continue_writing",
+    "get_section_writer",
+    "build_section_context",
+    "SECTION_ORDER",
 ]
