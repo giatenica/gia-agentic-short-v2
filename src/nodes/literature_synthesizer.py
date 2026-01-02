@@ -8,6 +8,7 @@ This node:
 5. Refines the research question based on gaps
 """
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -16,7 +17,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from src.config import settings
 from src.state.enums import ResearchStatus
-from src.state.models import SearchResult, Theme, WorkflowError
+from src.state.models import SearchResult, WorkflowError
 from src.state.schema import WorkflowState
 
 
@@ -65,7 +66,7 @@ def extract_themes(
         papers_text.append(paper_info)
     
     papers_summary = "\n\n".join(papers_text)
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.utcnow().strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -154,7 +155,7 @@ def identify_gaps(
         papers_summary.append(summary)
     papers_text = "\n".join(papers_summary)
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.utcnow().strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -259,7 +260,7 @@ def synthesize_literature(
     
     # Group papers by recency and impact
     recent_papers = [r for r in search_results if r.published_date and 
-                     r.published_date.year >= datetime.now().year - 3]
+                     r.published_date.year >= datetime.utcnow().year - 3]
     highly_cited = sorted(search_results, 
                          key=lambda x: x.citation_count or 0, 
                          reverse=True)[:10]
@@ -270,7 +271,7 @@ def synthesize_literature(
         for r in highly_cited if r.citation_count
     )
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.utcnow().strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -328,8 +329,6 @@ Avoid using banned words: delve, realm, harness, unlock, groundbreaking, etc."""
 
 def extract_section(text: str, section_name: str) -> str:
     """Extract a section from synthesized text."""
-    import re
-    
     # Try to find section with various header formats
     patterns = [
         rf"{section_name}[:\s]*\n(.*?)(?=\n\d+\.\s|\n[A-Z][A-Z ]+[:\s]*\n|$)",
@@ -352,7 +351,6 @@ def extract_bullets(text: str, section_name: str) -> list[str]:
         return []
     
     # Split by bullet points or numbered items
-    import re
     bullets = re.split(r'\n[-•*]\s*|\n\d+\.\s*', section)
     
     return [b.strip() for b in bullets if b.strip() and len(b.strip()) > 10]
@@ -395,7 +393,7 @@ def generate_contribution_statement(
     opportunities = synthesis.get("contribution_opportunities", [])
     opportunities_text = "\n".join(f"- {opp}" for opp in opportunities[:4])
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.utcnow().strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 

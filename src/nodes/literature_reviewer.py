@@ -16,7 +16,6 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-import httpx
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -32,7 +31,6 @@ from src.tools.academic_search import (
     rank_by_citations,
     convert_to_search_result,
 )
-from src.tools.citation_analysis import get_paper_details
 
 
 # =============================================================================
@@ -66,7 +64,7 @@ def generate_search_queries(
         api_key=settings.anthropic_api_key,
     )
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.utcnow().strftime("%Y-%m-%d")
     key_vars_str = ", ".join(key_variables) if key_variables else "not specified"
     
     prompt = f"""Current date: {current_date}

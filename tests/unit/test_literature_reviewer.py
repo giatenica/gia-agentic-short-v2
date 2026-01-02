@@ -1,8 +1,6 @@
 """Unit tests for LITERATURE_REVIEWER and LITERATURE_SYNTHESIZER nodes."""
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime
+from unittest.mock import patch, MagicMock
 
 from src.state.enums import ResearchStatus
 from src.state.models import SearchQuery, SearchResult
@@ -10,7 +8,6 @@ from src.state.schema import create_initial_state
 from src.nodes.literature_reviewer import (
     literature_reviewer_node,
     generate_search_queries,
-    execute_searches_sync,
     process_search_results,
     extract_methodology_precedents,
 )

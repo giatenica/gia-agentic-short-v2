@@ -387,6 +387,10 @@ def build_citation_network(
     Creates a graph of papers connected by citation relationships,
     useful for understanding the research landscape.
     
+    Note: This function makes multiple API calls in sequence. For large
+    networks, consider implementing rate limiting or exponential backoff
+    to avoid API rate limits.
+    
     Args:
         seed_paper_ids: List of paper IDs to start from.
         depth: How many levels of citations to follow (1 = direct only).
@@ -449,6 +453,10 @@ def find_common_citations(
     Find papers that are cited by multiple papers in a list.
     
     Helps identify foundational works that multiple papers build upon.
+    
+    Note: This function makes multiple API calls in sequence. For large
+    paper lists, consider implementing rate limiting or exponential backoff
+    to avoid API rate limits.
     
     Args:
         paper_ids: List of paper IDs to analyze.

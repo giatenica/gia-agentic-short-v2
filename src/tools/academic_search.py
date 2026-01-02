@@ -10,6 +10,8 @@ Supported databases:
 - Tavily: Broad academic coverage via web search
 """
 
+import xml.etree.ElementTree as ET
+
 import httpx
 from datetime import datetime
 from typing import Any
@@ -71,7 +73,7 @@ def semantic_scholar_search(
             if year_end:
                 year_filter += str(year_end)
             else:
-                year_filter += str(datetime.now().year)
+                year_filter += str(datetime.utcnow().year)
             params["year"] = year_filter
         
         # Add fields of study filter
@@ -108,6 +110,7 @@ def semantic_scholar_search(
                 try:
                     pub_date = paper["publicationDate"]
                 except (ValueError, TypeError):
+                    # Ignore invalid date formats and leave pub_date as None
                     pass
             
             results.append({
@@ -189,8 +192,6 @@ def arxiv_search(
         >>> arxiv_search("transformer attention mechanism", limit=5, categories=["cs.LG"])
     """
     try:
-        import xml.etree.ElementTree as ET
-        
         # Build search query
         search_query = query
         if categories:
@@ -453,6 +454,7 @@ def convert_to_search_result(
             elif isinstance(date_str, date_type):
                 pub_date = date_str
         except (ValueError, TypeError):
+            # Ignore invalid or malformed publication dates and leave pub_date as None
             pass
     
     return SearchResult(
