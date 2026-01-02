@@ -1,0 +1,804 @@
+"""Pydantic models for GIA Agentic v2 workflow state.
+
+These models define the data structures used throughout the research workflow,
+from intake form processing through final output generation.
+"""
+
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from src.state.enums import (
+    CritiqueSeverity,
+    EvidenceStrength,
+    PaperType,
+    ResearchType,
+    TargetJournal,
+    DataQualityLevel,
+    ColumnType,
+)
+
+
+# =============================================================================
+# Intake Form Models
+# =============================================================================
+
+
+class IntakeFormData(BaseModel):
+    """Validated intake form submission data.
+    
+    Maps directly to the HTML form fields in public/research_intake_form.html
+    """
+    
+    # Basic Information (required)
+    title: str = Field(
+        ..., 
+        min_length=5, 
+        max_length=500,
+        description="Project title (working title for research paper)"
+    )
+    research_question: str = Field(
+        ..., 
+        min_length=20, 
+        max_length=2000,
+        description="The specific research question to investigate"
+    )
+    target_journal: TargetJournal = Field(
+        ...,
+        description="Target journal for publication"
+    )
+    paper_type: PaperType = Field(
+        ...,
+        description="Type of paper (short article, full paper, etc.)"
+    )
+    research_type: ResearchType = Field(
+        ...,
+        description="Research methodology type"
+    )
+    
+    # Hypothesis (optional)
+    has_hypothesis: bool = Field(
+        default=False,
+        description="Whether user has a hypothesis"
+    )
+    hypothesis: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="User's hypothesis if provided"
+    )
+    
+    # Data (optional)
+    has_data: bool = Field(
+        default=False,
+        description="Whether user has existing data"
+    )
+    data_description: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Description of user's data"
+    )
+    data_files: list[str] | None = Field(
+        default=None,
+        description="List of uploaded data file paths"
+    )
+    data_sources: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Planned or used data sources"
+    )
+    key_variables: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Key dependent and independent variables"
+    )
+    
+    # Methodology (optional)
+    methodology: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Proposed methodology"
+    )
+    related_literature: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Related literature and key papers"
+    )
+    
+    # Contribution and Timeline (optional)
+    expected_contribution: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Expected contribution to the field"
+    )
+    deadline: date | None = Field(
+        default=None,
+        description="Target deadline for completion"
+    )
+    constraints: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Page limits, specific requirements, etc."
+    )
+    additional_notes: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Any additional information"
+    )
+    
+    @field_validator("hypothesis")
+    @classmethod
+    def validate_hypothesis(cls, v: str | None, info) -> str | None:
+        """Validate hypothesis is provided if has_hypothesis is True."""
+        if info.data.get("has_hypothesis") and not v:
+            raise ValueError("Hypothesis required when has_hypothesis is True")
+        return v
+    
+    @field_validator("key_variables")
+    @classmethod
+    def parse_key_variables(cls, v: str | None) -> str | None:
+        """Clean up key variables string."""
+        if v:
+            return v.strip()
+        return v
+
+    def get_key_variables_list(self) -> list[str]:
+        """Parse key_variables string into a list."""
+        if not self.key_variables:
+            return []
+        # Split on common delimiters
+        import re
+        variables = re.split(r"[,;\n]+", self.key_variables)
+        return [v.strip() for v in variables if v.strip()]
+    
+    def get_seed_literature_list(self) -> list[str]:
+        """Parse related_literature into individual references."""
+        if not self.related_literature:
+            return []
+        # Split on common patterns (periods followed by capital letters, or semicolons)
+        import re
+        refs = re.split(r"(?<=[.)])\s+(?=[A-Z])|;\s*", self.related_literature)
+        return [r.strip() for r in refs if r.strip()]
+
+
+# =============================================================================
+# Data Exploration Models
+# =============================================================================
+
+
+class DataFile(BaseModel):
+    """Metadata about an uploaded data file."""
+    
+    file_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique identifier for the file"
+    )
+    filename: str = Field(..., description="Original filename")
+    filepath: Path = Field(..., description="Path to the file on disk")
+    content_type: str = Field(
+        default="application/octet-stream",
+        description="MIME type of the file"
+    )
+    size_bytes: int = Field(..., ge=0, description="File size in bytes")
+    uploaded_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Upload timestamp"
+    )
+    
+    @property
+    def size_human(self) -> str:
+        """Human-readable file size."""
+        size = self.size_bytes
+        for unit in ["B", "KB", "MB", "GB"]:
+            if size < 1024:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} TB"
+    
+    @property
+    def extension(self) -> str:
+        """File extension without dot."""
+        return self.filepath.suffix.lstrip(".").lower()
+
+
+class ColumnAnalysis(BaseModel):
+    """Analysis of a single column in a data file."""
+    
+    name: str = Field(..., description="Column name")
+    dtype: ColumnType = Field(..., description="Detected data type")
+    non_null_count: int = Field(..., ge=0, description="Number of non-null values")
+    null_count: int = Field(..., ge=0, description="Number of null/missing values")
+    null_percentage: float = Field(..., ge=0, le=100, description="Percentage missing")
+    unique_count: int = Field(..., ge=0, description="Number of unique values")
+    
+    # Numeric statistics (only for numeric columns)
+    mean: float | None = Field(default=None, description="Mean value")
+    std: float | None = Field(default=None, description="Standard deviation")
+    min_value: float | None = Field(default=None, description="Minimum value")
+    max_value: float | None = Field(default=None, description="Maximum value")
+    q25: float | None = Field(default=None, description="25th percentile")
+    median: float | None = Field(default=None, description="Median (50th percentile)")
+    q75: float | None = Field(default=None, description="75th percentile")
+    
+    # Date statistics (only for date columns)
+    date_min: date | None = Field(default=None, description="Earliest date")
+    date_max: date | None = Field(default=None, description="Latest date")
+    
+    # Categorical statistics (only for categorical columns)
+    top_values: list[tuple[str, int]] | None = Field(
+        default=None, 
+        description="Most frequent values with counts"
+    )
+    
+    # Quality indicators
+    has_outliers: bool = Field(default=False, description="Whether outliers detected")
+    outlier_count: int = Field(default=0, ge=0, description="Number of outliers")
+
+
+class QualityIssue(BaseModel):
+    """A data quality issue detected during exploration."""
+    
+    issue_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique issue identifier"
+    )
+    severity: CritiqueSeverity = Field(..., description="Issue severity")
+    category: str = Field(..., description="Issue category (missing, outlier, etc.)")
+    column: str | None = Field(default=None, description="Affected column if applicable")
+    description: str = Field(..., description="Description of the issue")
+    suggestion: str | None = Field(default=None, description="Suggested fix")
+    affected_rows: int | None = Field(default=None, ge=0, description="Number of affected rows")
+
+
+class VariableMapping(BaseModel):
+    """Mapping between user-specified variables and detected columns."""
+    
+    user_variable: str = Field(..., description="Variable name from user input")
+    matched_column: str | None = Field(
+        default=None, 
+        description="Matched column name from data"
+    )
+    confidence: float = Field(
+        default=0.0, 
+        ge=0.0, 
+        le=1.0,
+        description="Confidence score for the match"
+    )
+    match_reason: str | None = Field(
+        default=None,
+        description="Reason for the match (exact, fuzzy, semantic)"
+    )
+
+
+class DataExplorationResult(BaseModel):
+    """Complete results from data exploration phase."""
+    
+    exploration_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique exploration identifier"
+    )
+    explored_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Exploration timestamp"
+    )
+    
+    # Files analyzed
+    files_analyzed: list[DataFile] = Field(
+        default_factory=list,
+        description="Files that were analyzed"
+    )
+    
+    # Schema information
+    total_rows: int = Field(default=0, ge=0, description="Total rows across all files")
+    total_columns: int = Field(default=0, ge=0, description="Total columns across all files")
+    columns: list[ColumnAnalysis] = Field(
+        default_factory=list,
+        description="Analysis of each column"
+    )
+    
+    # Variable mapping
+    variable_mappings: list[VariableMapping] = Field(
+        default_factory=list,
+        description="Mappings from user variables to columns"
+    )
+    
+    # Quality assessment
+    quality_level: DataQualityLevel = Field(
+        default=DataQualityLevel.NOT_ASSESSED,
+        description="Overall data quality level"
+    )
+    quality_issues: list[QualityIssue] = Field(
+        default_factory=list,
+        description="Detected quality issues"
+    )
+    quality_score: float = Field(
+        default=0.0, 
+        ge=0.0, 
+        le=1.0,
+        description="Numeric quality score"
+    )
+    
+    # Feasibility assessment
+    feasibility_assessment: str = Field(
+        default="",
+        description="Assessment of whether research question can be answered"
+    )
+    feasibility_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Feasibility score"
+    )
+    feasibility_issues: list[str] = Field(
+        default_factory=list,
+        description="Issues affecting feasibility"
+    )
+    
+    @property
+    def has_critical_issues(self) -> bool:
+        """Check if there are any critical quality issues."""
+        return any(
+            issue.severity == CritiqueSeverity.CRITICAL 
+            for issue in self.quality_issues
+        )
+    
+    @property
+    def issue_count_by_severity(self) -> dict[CritiqueSeverity, int]:
+        """Count issues by severity level."""
+        counts = {severity: 0 for severity in CritiqueSeverity}
+        for issue in self.quality_issues:
+            counts[issue.severity] += 1
+        return counts
+
+
+# =============================================================================
+# Research Planning Models
+# =============================================================================
+
+
+class SearchQuery(BaseModel):
+    """A search query to be executed."""
+    
+    query_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique query identifier"
+    )
+    query_text: str = Field(..., min_length=3, description="Search query text")
+    source_type: str = Field(
+        default="web",
+        description="Type of source (web, academic, news, etc.)"
+    )
+    priority: int = Field(default=1, ge=1, le=5, description="Query priority (1=highest)")
+    status: str = Field(default="pending", description="Query status")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp"
+    )
+
+
+class ResearchPlan(BaseModel):
+    """Structured research plan generated by the PLANNER node."""
+    
+    plan_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique plan identifier"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp"
+    )
+    revised_at: datetime | None = Field(
+        default=None,
+        description="Last revision timestamp"
+    )
+    
+    # Research question (potentially refined from original)
+    original_query: str = Field(..., description="Original research question")
+    refined_query: str | None = Field(
+        default=None,
+        description="Refined research question after gap analysis"
+    )
+    
+    # Decomposition
+    sub_questions: list[str] = Field(
+        default_factory=list,
+        description="Decomposed sub-questions to answer"
+    )
+    
+    # Search strategy
+    search_queries: list[SearchQuery] = Field(
+        default_factory=list,
+        description="Search queries to execute"
+    )
+    
+    # Methodology
+    methodology: str = Field(default="", description="Research methodology description")
+    methodology_justification: str = Field(
+        default="",
+        description="Why this methodology was chosen"
+    )
+    
+    # Expected outputs
+    expected_sections: list[str] = Field(
+        default_factory=list,
+        description="Expected sections in final output"
+    )
+    
+    # Success criteria
+    success_criteria: list[str] = Field(
+        default_factory=list,
+        description="Criteria for successful completion"
+    )
+    
+    # Contribution statement
+    contribution_statement: str = Field(
+        default="",
+        description="Clear statement of the paper's contribution"
+    )
+
+
+# =============================================================================
+# Search and Analysis Models
+# =============================================================================
+
+
+class SearchResult(BaseModel):
+    """A single search result from any source."""
+    
+    result_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique result identifier"
+    )
+    query_id: str = Field(..., description="ID of query that produced this result")
+    
+    # Content
+    title: str = Field(..., description="Result title")
+    url: str = Field(..., description="Source URL")
+    snippet: str = Field(default="", description="Text snippet or abstract")
+    full_content: str | None = Field(default=None, description="Full content if retrieved")
+    
+    # Metadata
+    source_type: str = Field(default="web", description="Type of source")
+    published_date: date | None = Field(default=None, description="Publication date")
+    authors: list[str] = Field(default_factory=list, description="Author names")
+    
+    # Academic metadata
+    citation_count: int | None = Field(default=None, ge=0, description="Citation count")
+    venue: str | None = Field(default=None, description="Journal/conference name")
+    doi: str | None = Field(default=None, description="DOI if available")
+    
+    # Quality indicators
+    relevance_score: float = Field(
+        default=0.0, 
+        ge=0.0, 
+        le=1.0,
+        description="Relevance to query"
+    )
+    retrieved_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Retrieval timestamp"
+    )
+
+
+class Finding(BaseModel):
+    """A key finding extracted from analysis."""
+    
+    finding_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique finding identifier"
+    )
+    statement: str = Field(..., description="The finding statement")
+    evidence_strength: EvidenceStrength = Field(
+        ...,
+        description="Strength of supporting evidence"
+    )
+    source_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs of supporting sources"
+    )
+    confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the finding"
+    )
+
+
+class Theme(BaseModel):
+    """A theme identified across multiple sources."""
+    
+    theme_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique theme identifier"
+    )
+    name: str = Field(..., description="Theme name")
+    description: str = Field(..., description="Theme description")
+    related_findings: list[str] = Field(
+        default_factory=list,
+        description="IDs of related findings"
+    )
+    source_count: int = Field(default=0, ge=0, description="Number of supporting sources")
+
+
+class AnalysisResult(BaseModel):
+    """Results from the analysis phase."""
+    
+    analysis_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique analysis identifier"
+    )
+    analyzed_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Analysis timestamp"
+    )
+    
+    # Findings
+    key_findings: list[Finding] = Field(
+        default_factory=list,
+        description="Key findings from analysis"
+    )
+    
+    # Themes
+    themes: list[Theme] = Field(
+        default_factory=list,
+        description="Identified themes"
+    )
+    
+    # Issues
+    contradictions: list[str] = Field(
+        default_factory=list,
+        description="Contradictions found in sources"
+    )
+    gaps: list[str] = Field(
+        default_factory=list,
+        description="Knowledge gaps identified"
+    )
+    
+    # Quality metrics
+    confidence_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Overall analysis confidence"
+    )
+    coverage_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="How well sub-questions are covered"
+    )
+    
+    # Source tracking
+    sources_used: list[str] = Field(
+        default_factory=list,
+        description="IDs of sources used in analysis"
+    )
+
+
+# =============================================================================
+# Draft and Review Models
+# =============================================================================
+
+
+class DraftSection(BaseModel):
+    """A section of the research draft."""
+    
+    section_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique section identifier"
+    )
+    title: str = Field(..., description="Section title")
+    content: str = Field(default="", description="Section content")
+    order: int = Field(..., ge=0, description="Section order in document")
+    
+    # Metadata
+    word_count: int = Field(default=0, ge=0, description="Word count")
+    citations: list[str] = Field(
+        default_factory=list,
+        description="Citation keys used in section"
+    )
+    
+    @model_validator(mode="after")
+    def compute_word_count(self) -> "DraftSection":
+        """Compute word count from content."""
+        if self.content:
+            self.word_count = len(self.content.split())
+        return self
+
+
+class ResearchDraft(BaseModel):
+    """Complete research draft from the WRITER node."""
+    
+    draft_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique draft identifier"
+    )
+    version: int = Field(default=1, ge=1, description="Draft version number")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Creation timestamp"
+    )
+    
+    # Content
+    title: str = Field(default="", description="Paper title")
+    abstract: str = Field(default="", description="Paper abstract")
+    sections: list[DraftSection] = Field(
+        default_factory=list,
+        description="Paper sections"
+    )
+    conclusion: str = Field(default="", description="Conclusion section")
+    
+    # References
+    references: list[str] = Field(
+        default_factory=list,
+        description="Formatted reference list"
+    )
+    
+    @property
+    def total_word_count(self) -> int:
+        """Total word count across all sections."""
+        count = len(self.abstract.split()) if self.abstract else 0
+        count += sum(s.word_count for s in self.sections)
+        count += len(self.conclusion.split()) if self.conclusion else 0
+        return count
+    
+    @property
+    def section_count(self) -> int:
+        """Number of sections."""
+        return len(self.sections)
+
+
+class CritiqueItem(BaseModel):
+    """A single critique point from the reviewer."""
+    
+    item_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique item identifier"
+    )
+    severity: CritiqueSeverity = Field(..., description="Issue severity")
+    category: str = Field(
+        ...,
+        description="Category (accuracy, completeness, coherence, citation, methodology, style)"
+    )
+    location: str = Field(
+        default="general",
+        description="Location in document (section name or 'general')"
+    )
+    description: str = Field(..., description="Description of the issue")
+    suggestion: str | None = Field(
+        default=None,
+        description="Suggested fix"
+    )
+
+
+class Critique(BaseModel):
+    """Complete critique from the REVIEWER node."""
+    
+    critique_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique critique identifier"
+    )
+    draft_version: int = Field(..., ge=1, description="Version of draft reviewed")
+    reviewed_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Review timestamp"
+    )
+    
+    # Critique items
+    items: list[CritiqueItem] = Field(
+        default_factory=list,
+        description="Individual critique items"
+    )
+    
+    # Scoring
+    overall_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=10.0,
+        description="Overall quality score (0-10)"
+    )
+    category_scores: dict[str, float] = Field(
+        default_factory=dict,
+        description="Scores by category"
+    )
+    
+    # Decision
+    recommendation: str = Field(
+        default="revise",
+        description="Recommendation: approve, revise, reject"
+    )
+    summary: str = Field(
+        default="",
+        description="Summary of critique"
+    )
+    
+    # Thresholds
+    pass_threshold: float = Field(default=7.5, description="Score needed to pass")
+    
+    @property
+    def passes_review(self) -> bool:
+        """Check if critique passes the threshold."""
+        return (
+            self.overall_score >= self.pass_threshold 
+            and self.recommendation == "approve"
+        )
+    
+    @property
+    def critical_count(self) -> int:
+        """Count of critical issues."""
+        return sum(1 for item in self.items if item.severity == CritiqueSeverity.CRITICAL)
+    
+    @property
+    def major_count(self) -> int:
+        """Count of major issues."""
+        return sum(1 for item in self.items if item.severity == CritiqueSeverity.MAJOR)
+
+
+# =============================================================================
+# Evidence Tracking
+# =============================================================================
+
+
+class EvidenceItem(BaseModel):
+    """Evidence supporting a claim in the draft."""
+    
+    evidence_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique evidence identifier"
+    )
+    claim: str = Field(..., description="The claim being supported")
+    source_id: str = Field(..., description="ID of the source")
+    source_url: str = Field(..., description="URL of the source")
+    locator: str = Field(
+        default="",
+        description="Specific location in source (page, paragraph, etc.)"
+    )
+    quote: str | None = Field(
+        default=None,
+        description="Direct quote from source"
+    )
+    strength: EvidenceStrength = Field(
+        ...,
+        description="Evidence strength"
+    )
+    confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in evidence"
+    )
+    verified: bool = Field(
+        default=False,
+        description="Whether evidence has been verified"
+    )
+
+
+# =============================================================================
+# Workflow Error Tracking
+# =============================================================================
+
+
+class WorkflowError(BaseModel):
+    """An error that occurred during workflow execution."""
+    
+    error_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique error identifier"
+    )
+    occurred_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="When the error occurred"
+    )
+    node: str = Field(..., description="Node where error occurred")
+    category: str = Field(..., description="Error category")
+    message: str = Field(..., description="Error message")
+    recoverable: bool = Field(
+        default=True,
+        description="Whether error is recoverable"
+    )
+    details: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional error details"
+    )

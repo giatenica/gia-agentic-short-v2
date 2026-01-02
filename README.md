@@ -56,15 +56,25 @@ gia-agentic-short-v2/
 │   ├── agents/           # Agent implementations
 │   │   ├── base.py       # ReAct agent with LangGraph
 │   │   └── research.py   # Research-focused agent
+│   ├── nodes/            # LangGraph nodes
+│   │   ├── intake.py     # INTAKE node for processing submissions
+│   │   └── data_explorer.py  # DATA_EXPLORER node for data analysis
+│   ├── state/            # State management
+│   │   ├── enums.py      # Status and type enumerations
+│   │   ├── models.py     # Pydantic data models
+│   │   └── schema.py     # WorkflowState TypedDict
 │   ├── tools/            # Tool definitions
 │   │   ├── search.py     # Tavily web search
-│   │   └── basic.py      # Utility tools
+│   │   ├── basic.py      # Utility tools
+│   │   └── data_exploration.py  # Data analysis tools
 │   ├── config/           # Configuration
 │   │   └── settings.py   # Environment settings
 │   └── main.py           # CLI entrypoint
 ├── studio/               # LangGraph Studio config
 │   ├── langgraph.json
 │   └── graphs.py
+├── tests/                # Test suite
+│   └── unit/             # Unit tests
 ├── pyproject.toml        # Dependencies
 └── .env                  # API keys (not in git)
 ```

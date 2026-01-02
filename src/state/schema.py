@@ -1,0 +1,300 @@
+"""WorkflowState schema for GIA Agentic v2.
+
+This module defines the central state object that flows through all nodes
+in the LangGraph workflow. It uses TypedDict with annotations for proper
+state management and message accumulation.
+"""
+
+from datetime import date, datetime
+from typing import Annotated, Any
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict
+
+from src.state.models import (
+    DataExplorationResult,
+    DataFile,
+    ResearchPlan,
+    SearchResult,
+    AnalysisResult,
+    ResearchDraft,
+    Critique,
+    EvidenceItem,
+    WorkflowError,
+)
+from src.state.enums import ResearchStatus
+
+
+class WorkflowState(TypedDict, total=False):
+    """
+    Central state schema for the GIA Agentic v2 research workflow.
+    
+    This state object persists across all graph nodes and maintains the
+    complete context of the research workflow. Uses TypedDict for LangGraph
+    compatibility with optional fields (total=False).
+    
+    The state is structured in logical groups:
+    1. Intake form data - User-provided research context
+    2. Data context - Uploaded data and exploration results
+    3. Research context - Planning and methodology
+    4. Literature context - Literature review results
+    5. Analysis context - Findings and synthesis
+    6. Draft context - Written output and review
+    7. Workflow metadata - Status, messages, errors
+    
+    Usage with LangGraph:
+        ```python
+        from langgraph.graph import StateGraph
+        from src.state import WorkflowState
+        
+        graph = StateGraph(WorkflowState)
+        graph.add_node("intake", intake_node)
+        # ... add more nodes
+        ```
+    """
+    
+    # =========================================================================
+    # Intake Form Data
+    # =========================================================================
+    
+    # Raw form submission (before parsing)
+    form_data: dict[str, Any]
+    
+    # Basic information (from intake form)
+    project_title: str
+    original_query: str  # research_question from form
+    target_journal: str
+    paper_type: str
+    research_type: str
+    
+    # Hypothesis (optional from form)
+    user_hypothesis: str | None
+    
+    # =========================================================================
+    # Data Context (from intake and exploration)
+    # =========================================================================
+    
+    # Uploaded data files
+    uploaded_data: list[DataFile]
+    
+    # User's description of their data
+    data_context: str | None
+    
+    # Results from DATA_EXPLORER node
+    data_exploration_results: DataExplorationResult | None
+    
+    # User-specified key variables
+    key_variables: list[str]
+    
+    # =========================================================================
+    # Research Context (from intake and planning)
+    # =========================================================================
+    
+    # User's proposed methodology
+    proposed_methodology: str | None
+    
+    # Seed literature from user (starting point for lit review)
+    seed_literature: list[str]
+    
+    # User's expected contribution
+    expected_contribution: str | None
+    
+    # Constraints
+    deadline: date | None
+    constraints: str | None
+    
+    # Research plan from PLANNER node
+    research_plan: ResearchPlan | None
+    
+    # =========================================================================
+    # Literature Context (from LITERATURE_REVIEWER and GAP_IDENTIFIER)
+    # =========================================================================
+    
+    # Literature synthesis (structured summary of literature)
+    literature_synthesis: dict[str, Any] | None
+    
+    # Key themes from literature
+    literature_themes: list[str]
+    
+    # Methodology precedents from literature
+    methodology_precedents: list[str]
+    
+    # Identified gaps from GAP_IDENTIFIER
+    identified_gaps: list[str]
+    
+    # Refined research question (after gap analysis)
+    refined_query: str | None
+    
+    # Contribution statement (from gap analysis)
+    contribution_statement: str | None
+    
+    # =========================================================================
+    # Search and Analysis Context
+    # =========================================================================
+    
+    # Search results from SEARCHER node
+    search_results: list[SearchResult]
+    
+    # Analysis results from DATA_ANALYST or CONCEPTUAL_SYNTHESIZER
+    analysis: AnalysisResult | None
+    
+    # Evidence registry for claim tracking
+    evidence_items: list[EvidenceItem]
+    
+    # =========================================================================
+    # Draft Context (from WRITER and REVIEWER)
+    # =========================================================================
+    
+    # Current draft from WRITER node
+    draft: ResearchDraft | None
+    
+    # Critique from REVIEWER node
+    critique: Critique | None
+    
+    # =========================================================================
+    # Workflow Metadata
+    # =========================================================================
+    
+    # Message history with add_messages reducer for accumulation
+    messages: Annotated[list[AnyMessage], add_messages]
+    
+    # Current workflow status
+    status: ResearchStatus
+    
+    # Number of revision iterations
+    iteration_count: int
+    
+    # Maximum allowed iterations
+    max_iterations: int
+    
+    # Workflow errors
+    errors: list[WorkflowError]
+    
+    # Checkpoint log
+    checkpoints: list[str]
+    
+    # Workflow timestamps
+    created_at: datetime
+    updated_at: datetime
+    
+    # Configuration overrides
+    config: dict[str, Any]
+
+
+def create_initial_state(
+    form_data: dict[str, Any] | None = None,
+    **kwargs
+) -> WorkflowState:
+    """
+    Create an initial WorkflowState with sensible defaults.
+    
+    Args:
+        form_data: Raw form submission data (optional).
+        **kwargs: Additional state fields to set.
+        
+    Returns:
+        Initialized WorkflowState.
+        
+    Example:
+        ```python
+        state = create_initial_state(
+            form_data={"title": "My Research", ...},
+            project_title="My Research"
+        )
+        ```
+    """
+    now = datetime.utcnow()
+    
+    defaults: WorkflowState = {
+        # Intake
+        "form_data": form_data or {},
+        "project_title": "",
+        "original_query": "",
+        "target_journal": "",
+        "paper_type": "",
+        "research_type": "",
+        "user_hypothesis": None,
+        
+        # Data
+        "uploaded_data": [],
+        "data_context": None,
+        "data_exploration_results": None,
+        "key_variables": [],
+        
+        # Research
+        "proposed_methodology": None,
+        "seed_literature": [],
+        "expected_contribution": None,
+        "deadline": None,
+        "constraints": None,
+        "research_plan": None,
+        
+        # Literature
+        "literature_synthesis": None,
+        "literature_themes": [],
+        "methodology_precedents": [],
+        "identified_gaps": [],
+        "refined_query": None,
+        "contribution_statement": None,
+        
+        # Search/Analysis
+        "search_results": [],
+        "analysis": None,
+        "evidence_items": [],
+        
+        # Draft
+        "draft": None,
+        "critique": None,
+        
+        # Metadata
+        "messages": [],
+        "status": ResearchStatus.INTAKE_PENDING,
+        "iteration_count": 0,
+        "max_iterations": 3,
+        "errors": [],
+        "checkpoints": [],
+        "created_at": now,
+        "updated_at": now,
+        "config": {},
+    }
+    
+    # Override with provided kwargs
+    defaults.update(kwargs)
+    
+    return defaults
+
+
+def validate_state_for_node(state: WorkflowState, node_name: str) -> tuple[bool, list[str]]:
+    """
+    Validate that the state has required fields for a specific node.
+    
+    Args:
+        state: Current workflow state.
+        node_name: Name of the node to validate for.
+        
+    Returns:
+        Tuple of (is_valid, list_of_missing_fields).
+    """
+    required_fields: dict[str, list[str]] = {
+        "intake": ["form_data"],
+        "data_explorer": ["uploaded_data"],
+        "literature_reviewer": ["original_query"],
+        "gap_identifier": ["literature_synthesis"],
+        "planner": ["original_query", "identified_gaps"],
+        "data_analyst": ["research_plan", "data_exploration_results"],
+        "conceptual_synthesizer": ["research_plan", "literature_synthesis"],
+        "writer": ["analysis"],
+        "reviewer": ["draft"],
+        "output": ["draft", "critique"],
+    }
+    
+    node_requirements = required_fields.get(node_name, [])
+    missing = []
+    
+    for field in node_requirements:
+        value = state.get(field)
+        if value is None or (isinstance(value, (list, dict, str)) and not value):
+            missing.append(field)
+    
+    return len(missing) == 0, missing
