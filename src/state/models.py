@@ -1257,7 +1257,7 @@ class DataAnalysisResult(BaseModel):
         description="Status of the analysis"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Creation timestamp"
     )
     
@@ -1555,7 +1555,7 @@ class ConceptualFramework(BaseModel):
         description="Unique framework identifier"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Creation timestamp"
     )
     
@@ -1666,7 +1666,7 @@ class ConceptualSynthesisResult(BaseModel):
         description="Status of the synthesis"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Creation timestamp"
     )
     

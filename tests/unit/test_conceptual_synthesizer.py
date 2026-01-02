@@ -8,20 +8,14 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.nodes.conceptual_synthesizer import (
     conceptual_synthesizer_node,
     route_after_conceptual_synthesizer,
 )
-from src.state.schema import create_initial_state, WorkflowState
-from src.state.enums import (
-    ResearchStatus,
-    PropositionStatus,
-    ConceptType,
-    RelationshipType,
-)
+from src.state.schema import create_initial_state
+from src.state.enums import ResearchStatus
 from src.state.models import (
     LiteratureSynthesis,
     GapAnalysis,

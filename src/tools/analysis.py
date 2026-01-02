@@ -251,7 +251,6 @@ def execute_regression_analysis(
         RegressionResult with coefficients, fit statistics, and diagnostics.
     """
     controls = control_variables or []
-    all_vars = independent_variables + controls
     
     # Create placeholder coefficients
     # In production, these would come from actual regression

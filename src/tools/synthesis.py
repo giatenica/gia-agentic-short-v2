@@ -151,9 +151,6 @@ def map_concept_relationships(
     """
     relationships = []
     
-    # Create relationships between concepts based on their types
-    concept_ids = [c.get("concept_id", str(uuid4())[:8]) for c in concepts]
-    
     # Generate relationships for constructs → variables
     constructs = [c for c in concepts if c.get("concept_type") == "construct"]
     variables = [c for c in concepts if c.get("concept_type") == "variable"]
@@ -458,7 +455,6 @@ def assess_theoretical_contribution(
     Returns:
         Dictionary with contribution assessment.
     """
-    n_concepts = len(framework.get("concepts", []))
     n_propositions = len(framework.get("propositions", []))
     
     # Assess contribution type

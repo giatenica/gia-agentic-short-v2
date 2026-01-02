@@ -83,11 +83,11 @@ Statistical analysis tools for DATA_ANALYST:
 | Tool | Description |
 |------|-------------|
 | `execute_descriptive_stats` | Summary statistics (mean, std, quartiles) |
-| `execute_correlation_analysis` | Correlation matrices and tests |
+| `generate_correlation_matrix` | Correlation matrices and tests |
 | `execute_regression_analysis` | OLS, fixed effects, panel data |
 | `execute_hypothesis_test` | t-tests, chi-square, ANOVA |
-| `execute_event_study` | Event study methodology |
-| `generate_findings` | Structure results into findings |
+| `execute_robustness_check` | Robustness and sensitivity checks |
+| `generate_finding` | Structure results into findings |
 
 ### Synthesis Tools (`src/tools/synthesis.py`)
 

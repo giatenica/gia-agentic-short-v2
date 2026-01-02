@@ -9,14 +9,13 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, date
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.nodes.data_analyst import (
     data_analyst_node,
     route_after_data_analyst,
 )
-from src.state.schema import create_initial_state, WorkflowState
+from src.state.schema import create_initial_state
 from src.state.enums import (
     ResearchStatus,
     AnalysisStatus,
@@ -217,8 +216,8 @@ class TestDataAnalystNode:
         
         analysis = result["analysis"]
         assert "regression_analyses" in analysis
-        # Should have at least one regression
-        assert len(analysis["regression_analyses"]) >= 0  # May be empty if variables insufficient
+        # Regression analyses list should exist (may be empty if insufficient variables)
+        assert isinstance(analysis["regression_analyses"], list)
     
     def test_hypothesis_testing(self, state_with_data):
         """Test hypothesis testing when hypothesis provided."""

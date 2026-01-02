@@ -14,7 +14,6 @@ from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
 
-from src.config import settings
 from src.state.enums import (
     ResearchStatus,
     AnalysisStatus,
@@ -32,15 +31,7 @@ from src.state.models import (
     WorkflowError,
 )
 from src.state.schema import WorkflowState
-from src.tools.synthesis import (
-    extract_key_concepts,
-    define_concept,
-    map_concept_relationships,
-    generate_propositions,
-    build_conceptual_framework,
-    ground_in_theory,
-    assess_theoretical_contribution,
-)
+from src.tools.synthesis import assess_theoretical_contribution
 
 
 # =============================================================================
@@ -273,8 +264,6 @@ def _assess_gap_coverage(
     research_question: str,
 ) -> tuple[bool, float, str]:
     """Assess how well the framework addresses the gap."""
-    gap_description = gap_info.get("gap_description", "")
-    
     # Assess based on framework completeness
     n_concepts = len(framework.concepts)
     n_propositions = len(framework.propositions)
