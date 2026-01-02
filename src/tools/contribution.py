@@ -7,7 +7,7 @@ This module provides tools for:
 4. Articulating novelty and impact
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -75,7 +75,7 @@ def generate_contribution_statement(
     if user_expected_contribution:
         user_context = f"\n\nUSER'S EXPECTED CONTRIBUTION:\n{user_expected_contribution}"
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -267,7 +267,7 @@ def position_in_literature(
     if related_papers:
         papers_context = "\n\nKEY RELATED PAPERS:\n" + "\n".join(f"- {p}" for p in related_papers[:10])
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -437,7 +437,7 @@ def differentiate_from_prior(
             if gap_analysis.primary_gap:
                 gap_context = f"\n\nPRIMARY GAP BEING ADDRESSED:\n{gap_analysis.primary_gap.title}: {gap_analysis.primary_gap.description}"
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -620,7 +620,7 @@ def refine_research_question(
     else:
         state = literature_synthesis.state_of_field[:300] if literature_synthesis.state_of_field else ""
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 

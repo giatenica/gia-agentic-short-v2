@@ -6,14 +6,12 @@ Tests cover:
 3. GAP_IDENTIFIER node (gap_identifier.py)
 """
 
-from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from src.state.enums import ResearchStatus
 from src.state.models import (
     ContributionStatement,
     GapAnalysis,
-    LiteratureSynthesis,
     RefinedResearchQuestion,
     ResearchGap,
     SearchResult,

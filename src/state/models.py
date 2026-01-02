@@ -4,7 +4,7 @@ These models define the data structures used throughout the research workflow,
 from intake form processing through final output generation.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -645,7 +645,7 @@ class GapAnalysis(BaseModel):
         description="Unique gap analysis identifier"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Analysis timestamp"
     )
     
@@ -724,7 +724,7 @@ class ContributionStatement(BaseModel):
         description="Unique statement identifier"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Creation timestamp"
     )
     
@@ -782,7 +782,7 @@ class RefinedResearchQuestion(BaseModel):
         description="Unique question identifier"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Creation timestamp"
     )
     

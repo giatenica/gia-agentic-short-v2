@@ -9,14 +9,11 @@ This node:
 6. Uses HITL (interrupt) for human approval of refined question
 """
 
-from datetime import datetime
 from typing import Any, Literal
 
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 
-from src.config import settings
 from src.state.enums import ResearchStatus
 from src.state.models import (
     ContributionStatement,
@@ -30,15 +27,9 @@ from src.state.models import (
 from src.state.schema import WorkflowState
 from src.tools.contribution import (
     generate_contribution_statement,
-    position_in_literature,
     refine_research_question,
 )
 from src.tools.gap_analysis import (
-    assess_gap_significance,
-    compare_coverage,
-    identify_empirical_gaps,
-    identify_methodological_gaps,
-    identify_theoretical_gaps,
     perform_gap_analysis,
 )
 

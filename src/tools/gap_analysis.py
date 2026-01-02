@@ -7,7 +7,7 @@ This module provides tools for:
 4. Generating gap rankings and recommendations
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -68,7 +68,7 @@ def compare_coverage(
     else:
         synthesis_text = _format_synthesis_model(literature_synthesis)
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -223,7 +223,7 @@ def identify_methodological_gaps(
     else:
         synthesis_text = _format_synthesis_model(literature_synthesis)
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -296,7 +296,7 @@ def identify_empirical_gaps(
     if data_context:
         data_info = f"\n\nUSER'S DATA CONTEXT:\n{data_context}"
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -367,7 +367,7 @@ def identify_theoretical_gaps(
     else:
         synthesis_text = _format_synthesis_model(literature_synthesis)
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -516,7 +516,7 @@ def assess_gap_significance(
     if user_contribution:
         contribution_info = f"\n\nUSER'S EXPECTED CONTRIBUTION:\n{user_contribution}"
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -588,6 +588,7 @@ def _parse_significance_response(
                         line.replace("ACADEMIC_IMPACT:", "").strip()
                     )
                 except ValueError:
+                    # Skip malformed score; model output may be non-numeric
                     pass
             elif line.startswith("PRACTICAL_RELEVANCE:"):
                 try:
@@ -595,6 +596,7 @@ def _parse_significance_response(
                         line.replace("PRACTICAL_RELEVANCE:", "").strip()
                     )
                 except ValueError:
+                    # Skip malformed score; model output may be non-numeric
                     pass
             elif line.startswith("FEASIBILITY:"):
                 try:
@@ -602,6 +604,7 @@ def _parse_significance_response(
                         line.replace("FEASIBILITY:", "").strip()
                     )
                 except ValueError:
+                    # Skip malformed score; model output may be non-numeric
                     pass
             elif line.startswith("ALIGNMENT:"):
                 try:
@@ -609,6 +612,7 @@ def _parse_significance_response(
                         line.replace("ALIGNMENT:", "").strip()
                     )
                 except ValueError:
+                    # Skip malformed score; model output may be non-numeric
                     pass
             elif line.startswith("OVERALL_SCORE:"):
                 try:
@@ -616,6 +620,7 @@ def _parse_significance_response(
                         line.replace("OVERALL_SCORE:", "").strip()
                     )
                 except ValueError:
+                    # Skip malformed score; model output may be non-numeric
                     pass
             elif line.startswith("REVISED_SIGNIFICANCE:"):
                 sig = line.replace("REVISED_SIGNIFICANCE:", "").strip().lower()
@@ -631,11 +636,13 @@ def _parse_significance_response(
                 ranking_text = line.replace("RANKING:", "").strip()
                 ranking = [int(x.strip()) for x in ranking_text.split(",")]
             except ValueError:
+                # Skip malformed ranking; fall back to default ordering
                 pass
         elif line.startswith("PRIMARY_GAP:"):
             try:
                 primary_gap = int(line.replace("PRIMARY_GAP:", "").strip()) - 1
             except ValueError:
+                # Skip malformed primary gap number; use default selection
                 pass
         elif line.startswith("PRIMARY_GAP_REASON:"):
             primary_reason = line.replace("PRIMARY_GAP_REASON:", "").strip()
@@ -764,7 +771,7 @@ def perform_gap_analysis(
         gap_significance_ranking=[
             g.gap_id for g in sorted(
                 research_gaps, 
-                key=lambda x: x.significance == "high",
+                key=lambda x: {"high": 3, "medium": 2, "low": 1}.get(x.significance, 0),
                 reverse=True
             )
         ],
