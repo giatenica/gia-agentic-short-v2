@@ -1938,7 +1938,61 @@ LANGSMITH_API_KEY=...      # Required
 TAVILY_API_KEY=...         # Required
 LANGSMITH_TRACING=true     # Recommended
 LANGSMITH_PROJECT=gia-agentic-v2
+
+# Node-level caching (for development/testing)
+CACHE_ENABLED=true         # Enable/disable caching (default: true)
+CACHE_PATH=./data/node_cache.db  # SQLite cache file path
+CACHE_TTL_DEFAULT=1800     # Default TTL in seconds (30 minutes)
+CACHE_TTL_LITERATURE=3600  # Literature search cache TTL (1 hour)
+CACHE_TTL_SYNTHESIS=1800   # Synthesis nodes cache TTL (30 minutes)
+CACHE_TTL_GAP_ANALYSIS=1800  # Gap analysis cache TTL (30 minutes)
+CACHE_TTL_WRITER=600       # Writer node cache TTL (10 minutes)
 ```
+
+---
+
+## Node-Level Caching
+
+LangGraph node-level caching is enabled by default to speed up development and testing by avoiding redundant LLM computation.
+
+### How It Works
+
+- Node outputs are cached based on a hash of their inputs
+- When the same input is provided, cached results are returned immediately
+- Each node can have a different TTL (time-to-live) for cache expiration
+- Cache is stored in SQLite for persistence across process restarts
+
+### Cached vs Non-Cached Nodes
+
+| Node | Caching | TTL | Rationale |
+|------|---------|-----|-----------|
+| `intake` | ❌ | - | Always process fresh user input |
+| `literature_reviewer` | ✅ | 1 hour | API calls are expensive; literature rarely changes |
+| `literature_synthesizer` | ✅ | 30 min | LLM synthesis is expensive |
+| `gap_identifier` | ✅ | 30 min | Analysis based on stable literature |
+| `planner` | ❌ | - | Contains interrupt() for human approval |
+| `data_analyst` | ✅ | 30 min | Analysis is expensive |
+| `conceptual_synthesizer` | ✅ | 30 min | LLM synthesis is expensive |
+| `writer` | ✅ | 10 min | Shorter TTL for iteration |
+
+### Disabling Caching
+
+For production or when fresh results are needed:
+
+```bash
+CACHE_ENABLED=false
+```
+
+Or clear the cache programmatically:
+
+```python
+from src.cache import clear_cache
+clear_cache()
+```
+
+### Cache Location
+
+Cache is stored at `./data/node_cache.db` by default. This directory is created automatically and should be added to `.gitignore`.
 
 ---
 

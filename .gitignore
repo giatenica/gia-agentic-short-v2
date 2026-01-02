@@ -48,5 +48,9 @@ Thumbs.db
 # LangGraph
 .langgraph/
 
+# Cache
+data/
+*.db
+
 # User defined (do not remove or change)
 docs/

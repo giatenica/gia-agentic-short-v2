@@ -32,6 +32,18 @@ class Settings:
     # Google Serper (alternative search)
     serper_api_key: str = os.getenv("GOOGLE_SERPER_API_KEY", "")
 
+    # Node-level caching configuration
+    # Caches LLM responses to avoid redundant computation during development/testing
+    cache_enabled: bool = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+    cache_path: str = os.getenv("CACHE_PATH", str(PROJECT_ROOT / "data" / "node_cache.db"))
+    cache_ttl_default: int = int(os.getenv("CACHE_TTL_DEFAULT", "1800"))  # 30 minutes
+    
+    # Per-node TTL overrides (in seconds)
+    cache_ttl_literature: int = int(os.getenv("CACHE_TTL_LITERATURE", "3600"))  # 1 hour
+    cache_ttl_synthesis: int = int(os.getenv("CACHE_TTL_SYNTHESIS", "1800"))  # 30 minutes
+    cache_ttl_gap_analysis: int = int(os.getenv("CACHE_TTL_GAP_ANALYSIS", "1800"))  # 30 minutes
+    cache_ttl_writer: int = int(os.getenv("CACHE_TTL_WRITER", "600"))  # 10 minutes
+
     def __post_init__(self):
         """Configure LangSmith environment variables."""
         if self.langsmith_api_key:
