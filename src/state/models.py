@@ -22,6 +22,12 @@ from src.state.enums import (
     MethodologyType,
     AnalysisApproach,
     PlanApprovalStatus,
+    FindingType,
+    AnalysisStatus,
+    StatisticalTestType,
+    ConceptType,
+    RelationshipType,
+    PropositionStatus,
 )
 
 
@@ -982,6 +988,769 @@ class AnalysisResult(BaseModel):
     sources_used: list[str] = Field(
         default_factory=list,
         description="IDs of sources used in analysis"
+    )
+
+
+# =============================================================================
+# Sprint 5: Statistical and Data Analysis Models
+# =============================================================================
+
+
+class StatisticalResult(BaseModel):
+    """Result of a statistical test."""
+    
+    result_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique result identifier"
+    )
+    test_type: StatisticalTestType = Field(
+        ...,
+        description="Type of statistical test"
+    )
+    test_name: str = Field(
+        ...,
+        description="Specific test name (e.g., 'Two-sample t-test')"
+    )
+    
+    # Test statistics
+    statistic: float = Field(..., description="Test statistic value")
+    p_value: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="P-value"
+    )
+    degrees_of_freedom: int | None = Field(
+        default=None,
+        description="Degrees of freedom if applicable"
+    )
+    
+    # Confidence interval
+    confidence_level: float = Field(
+        default=0.95,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level (e.g., 0.95 for 95%)"
+    )
+    confidence_interval_lower: float | None = Field(
+        default=None,
+        description="Lower bound of confidence interval"
+    )
+    confidence_interval_upper: float | None = Field(
+        default=None,
+        description="Upper bound of confidence interval"
+    )
+    
+    # Effect size
+    effect_size: float | None = Field(
+        default=None,
+        description="Effect size (Cohen's d, eta-squared, etc.)"
+    )
+    effect_size_type: str | None = Field(
+        default=None,
+        description="Type of effect size measure"
+    )
+    
+    # Interpretation
+    is_significant: bool = Field(
+        default=False,
+        description="Whether result is statistically significant at alpha=0.05"
+    )
+    interpretation: str = Field(
+        default="",
+        description="Plain language interpretation of the result"
+    )
+    
+    # Additional info
+    sample_size: int | None = Field(
+        default=None,
+        ge=1,
+        description="Sample size used in test"
+    )
+    assumptions_met: bool = Field(
+        default=True,
+        description="Whether test assumptions were met"
+    )
+    assumption_notes: str = Field(
+        default="",
+        description="Notes on assumption testing"
+    )
+
+
+class RegressionCoefficient(BaseModel):
+    """A single coefficient from a regression model."""
+    
+    variable: str = Field(..., description="Variable name")
+    coefficient: float = Field(..., description="Estimated coefficient")
+    std_error: float = Field(..., ge=0.0, description="Standard error")
+    t_statistic: float = Field(..., description="T-statistic")
+    p_value: float = Field(..., ge=0.0, le=1.0, description="P-value")
+    confidence_interval_lower: float = Field(..., description="Lower CI bound")
+    confidence_interval_upper: float = Field(..., description="Upper CI bound")
+    is_significant: bool = Field(
+        default=False,
+        description="Significant at alpha=0.05"
+    )
+
+
+class RegressionResult(BaseModel):
+    """Result of a regression analysis."""
+    
+    result_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique result identifier"
+    )
+    model_type: str = Field(
+        ...,
+        description="Type of regression (OLS, Fixed Effects, etc.)"
+    )
+    dependent_variable: str = Field(
+        ...,
+        description="Dependent variable name"
+    )
+    
+    # Model fit
+    r_squared: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="R-squared value"
+    )
+    adjusted_r_squared: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Adjusted R-squared"
+    )
+    f_statistic: float | None = Field(
+        default=None,
+        description="F-statistic for overall model"
+    )
+    f_p_value: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="P-value for F-statistic"
+    )
+    
+    # Coefficients
+    coefficients: list[RegressionCoefficient] = Field(
+        default_factory=list,
+        description="Regression coefficients"
+    )
+    
+    # Sample info
+    n_observations: int = Field(..., ge=1, description="Number of observations")
+    n_groups: int | None = Field(
+        default=None,
+        description="Number of groups (for panel data)"
+    )
+    
+    # Diagnostics
+    residual_std_error: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Residual standard error"
+    )
+    durbin_watson: float | None = Field(
+        default=None,
+        description="Durbin-Watson statistic"
+    )
+    heteroskedasticity_test: str | None = Field(
+        default=None,
+        description="Heteroskedasticity test result"
+    )
+    
+    # Interpretation
+    interpretation: str = Field(
+        default="",
+        description="Plain language interpretation"
+    )
+
+
+class DataAnalysisFinding(BaseModel):
+    """A finding from data analysis with statistical support."""
+    
+    finding_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique finding identifier"
+    )
+    finding_type: FindingType = Field(
+        ...,
+        description="Type of finding"
+    )
+    
+    # The finding
+    statement: str = Field(
+        ...,
+        min_length=20,
+        description="The finding statement"
+    )
+    detailed_description: str = Field(
+        default="",
+        description="Detailed description of the finding"
+    )
+    
+    # Statistical support
+    statistical_results: list[StatisticalResult] = Field(
+        default_factory=list,
+        description="Statistical tests supporting this finding"
+    )
+    regression_results: list[RegressionResult] = Field(
+        default_factory=list,
+        description="Regression analyses supporting this finding"
+    )
+    
+    # Evidence tracking
+    evidence: list["EvidenceItem"] = Field(
+        default_factory=list,
+        description="Evidence items supporting this finding"
+    )
+    evidence_strength: EvidenceStrength = Field(
+        default=EvidenceStrength.MODERATE,
+        description="Overall evidence strength"
+    )
+    
+    # Research question linkage
+    addresses_research_question: bool = Field(
+        default=False,
+        description="Whether this finding addresses the main research question"
+    )
+    addresses_gap: bool = Field(
+        default=False,
+        description="Whether this finding addresses the identified gap"
+    )
+    gap_coverage_explanation: str = Field(
+        default="",
+        description="How this finding addresses the gap"
+    )
+    
+    # Quality indicators
+    confidence_level: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in this finding"
+    )
+    robustness_checks_passed: int = Field(
+        default=0,
+        ge=0,
+        description="Number of robustness checks passed"
+    )
+    
+    # Limitations
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Known limitations of this finding"
+    )
+
+
+class DataAnalysisResult(BaseModel):
+    """Complete result from the DATA_ANALYST node."""
+    
+    result_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique result identifier"
+    )
+    analysis_status: AnalysisStatus = Field(
+        default=AnalysisStatus.COMPLETE,
+        description="Status of the analysis"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Creation timestamp"
+    )
+    
+    # Analysis metadata
+    methodology_used: str = Field(
+        default="",
+        description="Methodology used for analysis"
+    )
+    analysis_approach: AnalysisApproach | None = Field(
+        default=None,
+        description="Analysis approach used"
+    )
+    
+    # Data summary
+    data_summary: str = Field(
+        default="",
+        description="Summary of data used"
+    )
+    sample_size: int = Field(
+        default=0,
+        ge=0,
+        description="Total sample size"
+    )
+    variables_analyzed: list[str] = Field(
+        default_factory=list,
+        description="Variables included in analysis"
+    )
+    time_period: str | None = Field(
+        default=None,
+        description="Time period covered by data"
+    )
+    
+    # Descriptive statistics
+    descriptive_stats: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Descriptive statistics for key variables"
+    )
+    
+    # Findings
+    findings: list[DataAnalysisFinding] = Field(
+        default_factory=list,
+        description="All findings from the analysis"
+    )
+    main_findings: list[DataAnalysisFinding] = Field(
+        default_factory=list,
+        description="Main findings (subset of findings)"
+    )
+    
+    # Statistical results
+    statistical_tests: list[StatisticalResult] = Field(
+        default_factory=list,
+        description="All statistical test results"
+    )
+    regression_analyses: list[RegressionResult] = Field(
+        default_factory=list,
+        description="All regression analyses"
+    )
+    
+    # Gap assessment
+    gap_addressed: bool = Field(
+        default=False,
+        description="Whether the analysis addresses the identified gap"
+    )
+    gap_coverage_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="How well the gap is addressed (0-1)"
+    )
+    gap_coverage_explanation: str = Field(
+        default="",
+        description="Explanation of gap coverage"
+    )
+    
+    # Hypothesis testing
+    hypothesis_supported: bool | None = Field(
+        default=None,
+        description="Whether the main hypothesis is supported"
+    )
+    hypothesis_test_summary: str = Field(
+        default="",
+        description="Summary of hypothesis testing"
+    )
+    
+    # Quality assessment
+    overall_confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Overall confidence in the analysis"
+    )
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Known limitations"
+    )
+    robustness_summary: str = Field(
+        default="",
+        description="Summary of robustness checks"
+    )
+    
+    @property
+    def finding_count(self) -> int:
+        """Total number of findings."""
+        return len(self.findings)
+    
+    @property
+    def significant_findings(self) -> list[DataAnalysisFinding]:
+        """Findings with significant statistical support."""
+        significant = []
+        for f in self.findings:
+            has_significant = any(
+                r.is_significant for r in f.statistical_results
+            ) or any(
+                r.f_p_value is not None and r.f_p_value < 0.05
+                for r in f.regression_results
+            )
+            if has_significant:
+                significant.append(f)
+        return significant
+
+
+# =============================================================================
+# Sprint 5: Conceptual Framework Models
+# =============================================================================
+
+
+class Concept(BaseModel):
+    """A theoretical concept in a framework."""
+    
+    concept_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique concept identifier"
+    )
+    name: str = Field(
+        ...,
+        min_length=2,
+        max_length=100,
+        description="Concept name"
+    )
+    concept_type: ConceptType = Field(
+        ...,
+        description="Type of concept"
+    )
+    
+    # Definition
+    definition: str = Field(
+        ...,
+        min_length=20,
+        description="Concept definition"
+    )
+    operationalization: str | None = Field(
+        default=None,
+        description="How the concept can be measured/operationalized"
+    )
+    
+    # Sources
+    source_literature: list[str] = Field(
+        default_factory=list,
+        description="Literature sources for this concept"
+    )
+    derived_from: list[str] = Field(
+        default_factory=list,
+        description="Other concept IDs this is derived from"
+    )
+    
+    # Properties
+    is_observable: bool = Field(
+        default=True,
+        description="Whether concept is directly observable"
+    )
+    abstraction_level: str = Field(
+        default="medium",
+        description="Level of abstraction (low, medium, high)"
+    )
+
+
+class ConceptRelationship(BaseModel):
+    """A relationship between two concepts."""
+    
+    relationship_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique relationship identifier"
+    )
+    
+    # Concepts involved
+    source_concept_id: str = Field(..., description="Source concept ID")
+    target_concept_id: str = Field(..., description="Target concept ID")
+    relationship_type: RelationshipType = Field(
+        ...,
+        description="Type of relationship"
+    )
+    
+    # Relationship details
+    description: str = Field(
+        default="",
+        description="Description of the relationship"
+    )
+    strength: str = Field(
+        default="moderate",
+        description="Expected strength (weak, moderate, strong)"
+    )
+    direction: str = Field(
+        default="positive",
+        description="Direction (positive, negative, mixed)"
+    )
+    
+    # Support
+    theoretical_basis: str = Field(
+        default="",
+        description="Theoretical basis for this relationship"
+    )
+    empirical_support: EvidenceStrength = Field(
+        default=EvidenceStrength.MODERATE,
+        description="Level of empirical support"
+    )
+    supporting_literature: list[str] = Field(
+        default_factory=list,
+        description="Literature supporting this relationship"
+    )
+
+
+class Proposition(BaseModel):
+    """A theoretical proposition in a framework."""
+    
+    proposition_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique proposition identifier"
+    )
+    
+    # The proposition
+    statement: str = Field(
+        ...,
+        min_length=20,
+        description="Proposition statement"
+    )
+    formal_statement: str | None = Field(
+        default=None,
+        description="Formal/symbolic statement if applicable"
+    )
+    
+    # Derivation
+    derived_from_concepts: list[str] = Field(
+        default_factory=list,
+        description="Concept IDs this proposition is derived from"
+    )
+    derived_from_relationships: list[str] = Field(
+        default_factory=list,
+        description="Relationship IDs this proposition is derived from"
+    )
+    derivation_logic: str = Field(
+        default="",
+        description="Logic/reasoning for the derivation"
+    )
+    
+    # Properties
+    proposition_status: PropositionStatus = Field(
+        default=PropositionStatus.PROPOSED,
+        description="Current status of the proposition"
+    )
+    is_testable: bool = Field(
+        default=True,
+        description="Whether proposition is empirically testable"
+    )
+    test_approach: str | None = Field(
+        default=None,
+        description="How this proposition could be tested"
+    )
+    
+    # Support
+    empirical_support: EvidenceStrength = Field(
+        default=EvidenceStrength.INSUFFICIENT,
+        description="Level of empirical support"
+    )
+    supporting_evidence: list[str] = Field(
+        default_factory=list,
+        description="Evidence supporting this proposition"
+    )
+    contrary_evidence: list[str] = Field(
+        default_factory=list,
+        description="Evidence against this proposition"
+    )
+    
+    # Boundary conditions
+    boundary_conditions: list[str] = Field(
+        default_factory=list,
+        description="Conditions under which proposition holds"
+    )
+
+
+class ConceptualFramework(BaseModel):
+    """A complete conceptual framework from the CONCEPTUAL_SYNTHESIZER node."""
+    
+    framework_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique framework identifier"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Creation timestamp"
+    )
+    
+    # Framework identity
+    title: str = Field(
+        ...,
+        min_length=5,
+        max_length=200,
+        description="Framework title"
+    )
+    abstract: str = Field(
+        default="",
+        description="Brief abstract of the framework"
+    )
+    description: str = Field(
+        ...,
+        min_length=50,
+        description="Full description of the framework"
+    )
+    
+    # Core components
+    concepts: list[Concept] = Field(
+        default_factory=list,
+        description="Concepts in the framework"
+    )
+    relationships: list[ConceptRelationship] = Field(
+        default_factory=list,
+        description="Relationships between concepts"
+    )
+    propositions: list[Proposition] = Field(
+        default_factory=list,
+        description="Propositions derived from the framework"
+    )
+    
+    # Theoretical grounding
+    theoretical_foundations: list[str] = Field(
+        default_factory=list,
+        description="Existing theories this framework builds on"
+    )
+    seminal_works: list[str] = Field(
+        default_factory=list,
+        description="Seminal works informing the framework"
+    )
+    grounding_explanation: str = Field(
+        default="",
+        description="How framework connects to existing theory"
+    )
+    
+    # Scope
+    domain: str = Field(
+        default="",
+        description="Domain/field of application"
+    )
+    scope_conditions: list[str] = Field(
+        default_factory=list,
+        description="Conditions defining framework scope"
+    )
+    
+    # Quality and contribution
+    novelty_assessment: str = Field(
+        default="",
+        description="Assessment of framework novelty"
+    )
+    theoretical_contribution: str = Field(
+        default="",
+        description="Statement of theoretical contribution"
+    )
+    practical_implications: list[str] = Field(
+        default_factory=list,
+        description="Practical implications of the framework"
+    )
+    
+    # Limitations
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Known limitations"
+    )
+    future_directions: list[str] = Field(
+        default_factory=list,
+        description="Suggested future research directions"
+    )
+    
+    @property
+    def concept_count(self) -> int:
+        """Number of concepts in framework."""
+        return len(self.concepts)
+    
+    @property
+    def proposition_count(self) -> int:
+        """Number of propositions."""
+        return len(self.propositions)
+    
+    @property
+    def testable_propositions(self) -> list[Proposition]:
+        """Propositions that are empirically testable."""
+        return [p for p in self.propositions if p.is_testable]
+
+
+class ConceptualSynthesisResult(BaseModel):
+    """Complete result from the CONCEPTUAL_SYNTHESIZER node."""
+    
+    result_id: str = Field(
+        default_factory=lambda: str(uuid4())[:8],
+        description="Unique result identifier"
+    )
+    analysis_status: AnalysisStatus = Field(
+        default=AnalysisStatus.COMPLETE,
+        description="Status of the synthesis"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Creation timestamp"
+    )
+    
+    # The framework
+    framework: ConceptualFramework | None = Field(
+        default=None,
+        description="The developed conceptual framework"
+    )
+    
+    # Synthesis summary
+    synthesis_approach: str = Field(
+        default="",
+        description="Approach used for synthesis"
+    )
+    literature_base: str = Field(
+        default="",
+        description="Description of literature base used"
+    )
+    papers_synthesized: int = Field(
+        default=0,
+        ge=0,
+        description="Number of papers synthesized"
+    )
+    
+    # Key outputs
+    key_concepts_identified: list[str] = Field(
+        default_factory=list,
+        description="Key concepts identified"
+    )
+    theoretical_mechanisms: list[str] = Field(
+        default_factory=list,
+        description="Theoretical mechanisms identified"
+    )
+    
+    # Gap assessment
+    gap_addressed: bool = Field(
+        default=False,
+        description="Whether the synthesis addresses the identified gap"
+    )
+    gap_coverage_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="How well the gap is addressed (0-1)"
+    )
+    gap_coverage_explanation: str = Field(
+        default="",
+        description="Explanation of gap coverage"
+    )
+    
+    # Contribution assessment
+    contribution_type: str = Field(
+        default="theoretical",
+        description="Type of contribution (theoretical, integrative, etc.)"
+    )
+    contribution_statement: str = Field(
+        default="",
+        description="Statement of the contribution"
+    )
+    
+    # Quality assessment
+    overall_confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Overall confidence in the synthesis"
+    )
+    coherence_score: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Internal coherence of the framework"
+    )
+    grounding_score: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="How well grounded in existing theory"
+    )
+    
+    # Limitations
+    limitations: list[str] = Field(
+        default_factory=list,
+        description="Known limitations"
     )
 
 

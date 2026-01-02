@@ -50,6 +50,28 @@ from src.tools.contribution import (
     generate_contribution_tool,
     refine_question_tool,
 )
+from src.tools.analysis import (
+    execute_descriptive_stats,
+    generate_correlation_matrix,
+    execute_hypothesis_test,
+    execute_regression_analysis,
+    generate_finding,
+    assess_gap_coverage,
+    execute_robustness_check,
+    get_analysis_tools,
+)
+from src.tools.synthesis import (
+    extract_key_concepts,
+    define_concept,
+    map_concept_relationships,
+    define_relationship,
+    generate_propositions,
+    define_proposition,
+    build_conceptual_framework,
+    ground_in_theory,
+    assess_theoretical_contribution,
+    get_synthesis_tools,
+)
 
 # Tool collections
 GAP_ANALYSIS_TOOLS = [
@@ -61,6 +83,9 @@ CONTRIBUTION_TOOLS = [
     generate_contribution_tool,
     refine_question_tool,
 ]
+
+ANALYSIS_TOOLS = get_analysis_tools()
+SYNTHESIS_TOOLS = get_synthesis_tools()
 
 __all__ = [
     # Search tools
@@ -114,4 +139,26 @@ __all__ = [
     "generate_contribution_tool",
     "refine_question_tool",
     "CONTRIBUTION_TOOLS",
+    # Analysis tools (Sprint 5)
+    "execute_descriptive_stats",
+    "generate_correlation_matrix",
+    "execute_hypothesis_test",
+    "execute_regression_analysis",
+    "generate_finding",
+    "assess_gap_coverage",
+    "execute_robustness_check",
+    "get_analysis_tools",
+    "ANALYSIS_TOOLS",
+    # Synthesis tools (Sprint 5)
+    "extract_key_concepts",
+    "define_concept",
+    "map_concept_relationships",
+    "define_relationship",
+    "generate_propositions",
+    "define_proposition",
+    "build_conceptual_framework",
+    "ground_in_theory",
+    "assess_theoretical_contribution",
+    "get_synthesis_tools",
+    "SYNTHESIS_TOOLS",
 ]
