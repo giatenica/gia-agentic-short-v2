@@ -179,7 +179,7 @@ class JournalStyleMatcher:
         
         lines = text.split('\n')
         for line_num, line in enumerate(lines, 1):
-            for match in em_dash_pattern.finditer(line):
+            for _ in em_dash_pattern.finditer(line):
                 issues.append(JournalStyleIssue(
                     issue_type="journal_mismatch",
                     description="Em dash or en dash found; use semicolons, colons, or periods instead",

@@ -11,9 +11,6 @@ from datetime import datetime, timezone
 from typing import Literal
 import logging
 
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from src.config import settings
 from src.state.schema import WorkflowState
 from src.state.models import (
@@ -21,19 +18,15 @@ from src.state.models import (
     WriterOutput,
     SectionWritingContext,
     get_section_word_count_target,
-    StyleViolation,
     ReferenceList,
-    CitationEntry,
-    ArgumentThread,
 )
 from src.state.enums import (
     SectionType,
     WritingStatus,
-    StyleViolationType,
     JournalTarget,
 )
 from src.style import StyleEnforcer
-from src.citations import CitationManager, ReferenceListGenerator
+from src.citations import CitationManager
 from src.writers import (
     BaseSectionWriter,
     SectionWriterConfig,
@@ -173,8 +166,8 @@ def build_section_context(
     if conceptual_output:
         has_qualitative = True
     
-    # Get argument coherence prompt
-    coherence_prompt = argument_manager.generate_coherence_prompt(section_type)
+    # Get argument coherence prompt (stored for future prompt enhancement)
+    _ = argument_manager.generate_coherence_prompt(section_type)
     
     return SectionWritingContext(
         section_type=section_type.value,
@@ -307,19 +300,13 @@ def writer_node(state: WorkflowState) -> dict:
             f"{len(section.style_violations)} violations)"
         )
     
-    # Generate reference list from citations
-    reference_generator = ReferenceListGenerator()
-    
     # Collect all citation keys from sections
     all_citation_keys: list[str] = []
     for section in completed_sections:
         all_citation_keys.extend(section.citations_used)
     
-    # Get unique citation keys
-    unique_keys = list(set(all_citation_keys))
-    
     # Build reference list - for now, use placeholder entries
-    # In production, this would look up full citation data
+    # In production, this would look up full citation data using unique keys
     reference_list = ReferenceList(
         entries=[],  # Would be populated from citation database
         format_style="chicago_author_date",
@@ -327,7 +314,6 @@ def writer_node(state: WorkflowState) -> dict:
     
     # Calculate total statistics
     total_word_count = sum(s.word_count for s in completed_sections)
-    total_violations = len(all_violations)
     
     # Get coherence summary
     coherence_summary = argument_manager.get_coherence_summary()

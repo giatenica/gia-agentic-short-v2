@@ -6,7 +6,6 @@ Provides common functionality for all section writers.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -14,7 +13,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from src.config import settings
 from src.state.models import (
     PaperSection,
-    StyleViolation,
     CitationEntry,
     SectionWritingContext,
     get_section_word_count_target,

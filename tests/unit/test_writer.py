@@ -1,8 +1,5 @@
 """Unit tests for Sprint 6 WRITER node and section writers."""
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from src.state.enums import (
@@ -474,8 +471,8 @@ class TestStyleModuleImports:
     def test_banned_words_filter_import(self):
         """Test BannedWordsFilter can be imported."""
         from src.style import BannedWordsFilter
-        filter = BannedWordsFilter()
-        assert hasattr(filter, "check")
+        banned_filter = BannedWordsFilter()
+        assert hasattr(banned_filter, "check")
     
     def test_academic_tone_checker_import(self):
         """Test AcademicToneChecker can be imported."""
@@ -490,18 +487,18 @@ class TestBannedWordsFilter:
     def test_detect_banned_word(self):
         """Test detection of banned words."""
         from src.style import BannedWordsFilter
-        filter = BannedWordsFilter()
+        banned_filter = BannedWordsFilter()
         text = "We leverage machine learning to harness the power of data."
-        violations = filter.check(text)
+        violations = banned_filter.check(text)
         banned_texts = [v.original_text.lower() for v in violations]
         assert any("leverage" in t for t in banned_texts) or any("harness" in t for t in banned_texts)
     
     def test_no_violation_clean_text(self):
         """Test that clean text has no violations."""
         from src.style import BannedWordsFilter
-        filter = BannedWordsFilter()
+        banned_filter = BannedWordsFilter()
         text = "We use regression analysis to examine the relationship."
-        violations = filter.check(text)
+        violations = banned_filter.check(text)
         # May have some violations, but should be minimal
         assert isinstance(violations, list)
 

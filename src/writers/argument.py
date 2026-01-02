@@ -198,7 +198,8 @@ class ArgumentManager:
         issues: list[str] = []
         
         section_type = section.section_type
-        requirements = self.get_section_requirements(section_type)
+        # Get requirements for future validation expansion
+        _ = self.get_section_requirements(section_type)
         
         # For introduction, check that main claim is made
         if section_type == "introduction":

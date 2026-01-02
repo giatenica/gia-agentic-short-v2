@@ -1,6 +1,6 @@
 """Citation manager for tracking and verifying citations."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from src.state.models import CitationEntry, StyleViolation
 from src.state.enums import CritiqueSeverity

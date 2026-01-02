@@ -4,11 +4,9 @@ Integrates BannedWordsFilter, AcademicToneChecker, HedgingLanguageChecker,
 PrecisionChecker, and JournalStyleMatcher into a single interface.
 """
 
-from pathlib import Path
 from dataclasses import dataclass
 
 from src.state.models import StyleViolation
-from src.state.enums import CritiqueSeverity
 from src.style.banned_words import BannedWordsFilter
 from src.style.academic_tone import AcademicToneChecker
 from src.style.hedging import HedgingLanguageChecker

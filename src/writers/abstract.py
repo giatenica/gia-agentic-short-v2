@@ -122,6 +122,12 @@ ABSTRACT-SPECIFIC RULES:
                 "",
             ])
         
+        if discussion_summary:
+            prompt_parts.extend([
+                f"DISCUSSION PREVIEW: {discussion_summary}...",
+                "",
+            ])
+        
         if conclusion_summary:
             prompt_parts.extend([
                 f"CONCLUSION PREVIEW: {conclusion_summary}...",
