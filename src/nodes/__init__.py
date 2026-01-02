@@ -30,6 +30,10 @@ from src.nodes.gap_identifier import (
     route_after_gap_identifier,
     get_gap_identifier_tools,
 )
+from src.nodes.planner import (
+    planner_node,
+    route_after_planner,
+)
 
 __all__ = [
     # Intake node
@@ -63,4 +67,7 @@ __all__ = [
     "should_refine_further",
     "route_after_gap_identifier",
     "get_gap_identifier_tools",
+    # Planner node
+    "planner_node",
+    "route_after_planner",
 ]

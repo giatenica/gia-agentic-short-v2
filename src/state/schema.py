@@ -22,6 +22,9 @@ from src.state.models import (
     Critique,
     EvidenceItem,
     WorkflowError,
+    GapAnalysis,
+    ContributionStatement,
+    RefinedResearchQuestion,
 )
 from src.state.enums import ResearchStatus
 
@@ -123,11 +126,20 @@ class WorkflowState(TypedDict, total=False):
     # Identified gaps from GAP_IDENTIFIER
     identified_gaps: list[str]
     
+    # Gap analysis result (structured from GAP_IDENTIFIER)
+    gap_analysis: GapAnalysis | dict[str, Any] | None
+    
     # Refined research question (after gap analysis)
     refined_query: str | None
     
+    # Refined research question object
+    refined_research_question: RefinedResearchQuestion | dict[str, Any] | None
+    
     # Contribution statement (from gap analysis)
     contribution_statement: str | None
+    
+    # Contribution statement object
+    contribution: ContributionStatement | dict[str, Any] | None
     
     # =========================================================================
     # Search and Analysis Context
@@ -235,8 +247,11 @@ def create_initial_state(
         "literature_themes": [],
         "methodology_precedents": [],
         "identified_gaps": [],
+        "gap_analysis": None,
         "refined_query": None,
+        "refined_research_question": None,
         "contribution_statement": None,
+        "contribution": None,
         
         # Search/Analysis
         "search_results": [],

@@ -283,7 +283,7 @@ def prepare_approval_request(
 
 
 def process_approval_response(
-    response: dict[str, Any],
+    response: dict[str, Any] | str,
     refined_question: RefinedResearchQuestion,
     contribution: ContributionStatement,
 ) -> tuple[str, str]:
@@ -291,13 +291,25 @@ def process_approval_response(
     Process the human's approval response.
     
     Args:
-        response: The response from interrupt().
+        response: The response from interrupt() - can be dict or string.
         refined_question: The original refined question.
         contribution: The original contribution statement.
         
     Returns:
         Tuple of (final_refined_question, final_contribution_statement).
     """
+    # Handle string responses from LangGraph Studio
+    if isinstance(response, str):
+        response_lower = response.lower().strip()
+        if response_lower in ["approve", "yes", "ok", "accept", "y"]:
+            return refined_question.refined_question, contribution.main_statement
+        elif response_lower in ["reject", "no", "n"]:
+            return refined_question.original_question, ""
+        else:
+            # Treat as a modified question
+            return response.strip(), contribution.main_statement
+    
+    # Handle dict responses
     action = response.get("action", "approve")
     
     if action == "approve":

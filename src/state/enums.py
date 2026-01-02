@@ -146,3 +146,81 @@ class GapSignificance(str, Enum):
     HIGH = "high"        # Major gap with strong potential impact
     MEDIUM = "medium"    # Notable gap worth addressing
     LOW = "low"          # Minor gap, incremental contribution
+
+
+class MethodologyType(str, Enum):
+    """Types of research methodology for the PLANNER node."""
+    
+    # Quantitative Methods
+    REGRESSION_ANALYSIS = "regression_analysis"
+    EVENT_STUDY = "event_study"
+    PANEL_DATA = "panel_data"
+    TIME_SERIES = "time_series"
+    CROSS_SECTIONAL = "cross_sectional"
+    DIFFERENCE_IN_DIFFERENCES = "difference_in_differences"
+    INSTRUMENTAL_VARIABLES = "instrumental_variables"
+    PROPENSITY_SCORE_MATCHING = "propensity_score_matching"
+    
+    # Qualitative Methods
+    CASE_STUDY = "case_study"
+    CONTENT_ANALYSIS = "content_analysis"
+    GROUNDED_THEORY = "grounded_theory"
+    THEMATIC_ANALYSIS = "thematic_analysis"
+    
+    # Mixed Methods
+    SEQUENTIAL_MIXED = "sequential_mixed"
+    CONCURRENT_MIXED = "concurrent_mixed"
+    
+    # Theoretical Methods
+    ANALYTICAL_MODEL = "analytical_model"
+    SIMULATION = "simulation"
+    CONCEPTUAL_FRAMEWORK = "conceptual_framework"
+    
+    # Review Methods
+    SYSTEMATIC_REVIEW = "systematic_review"
+    META_ANALYSIS = "meta_analysis"
+    NARRATIVE_REVIEW = "narrative_review"
+    REPLICATION = "replication"
+    
+    # Other
+    OTHER = "other"
+
+
+class AnalysisApproach(str, Enum):
+    """Analysis approaches for research methodology."""
+    
+    # Statistical Analysis
+    DESCRIPTIVE_STATISTICS = "descriptive_statistics"
+    INFERENTIAL_STATISTICS = "inferential_statistics"
+    MULTIVARIATE_ANALYSIS = "multivariate_analysis"
+    BAYESIAN_ANALYSIS = "bayesian_analysis"
+    
+    # Econometric Analysis
+    OLS_REGRESSION = "ols_regression"
+    FIXED_EFFECTS = "fixed_effects"
+    RANDOM_EFFECTS = "random_effects"
+    GMM = "gmm"  # Generalized Method of Moments
+    TWO_STAGE_LEAST_SQUARES = "2sls"
+    
+    # Finance-Specific
+    ASSET_PRICING_TESTS = "asset_pricing_tests"
+    PORTFOLIO_ANALYSIS = "portfolio_analysis"
+    OPTION_PRICING_MODELS = "option_pricing_models"
+    MARKET_MICROSTRUCTURE = "market_microstructure"
+    
+    # Qualitative Analysis
+    CODING_ANALYSIS = "coding_analysis"
+    NARRATIVE_ANALYSIS = "narrative_analysis"
+    DISCOURSE_ANALYSIS = "discourse_analysis"
+    
+    # Other
+    OTHER = "other"
+
+
+class PlanApprovalStatus(str, Enum):
+    """Status of research plan approval."""
+    
+    PENDING = "pending"
+    APPROVED = "approved"
+    REVISION_REQUESTED = "revision_requested"
+    REJECTED = "rejected"
