@@ -28,7 +28,7 @@ from src.state.models import (
     RegressionCoefficient,
     DataAnalysisFinding,
 )
-from src.tools.data_loading import DataRegistry
+from src.tools.data_loading import get_registry
 
 
 # =============================================================================
@@ -55,7 +55,7 @@ def execute_descriptive_stats(
     Returns:
         Dictionary with descriptive statistics for each variable.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return {
@@ -153,7 +153,7 @@ def compute_correlation_matrix(
     Returns:
         Dictionary with correlation matrix, p-values, and notable correlations.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return {
@@ -285,7 +285,7 @@ def run_ttest(
     Returns:
         StatisticalResult with test statistics, p-value, effect size, and interpretation.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return StatisticalResult(
@@ -452,7 +452,7 @@ def run_anova(
     Returns:
         StatisticalResult with F-statistic, p-value, effect size, and group statistics.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return StatisticalResult(
@@ -589,7 +589,7 @@ def run_chi_square(
     Returns:
         StatisticalResult with chi-square statistic, p-value, and effect size.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return StatisticalResult(
@@ -701,7 +701,7 @@ def run_ols_regression(
     Returns:
         RegressionResult with coefficients, fit statistics, and diagnostics.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return RegressionResult(
@@ -853,7 +853,7 @@ def run_logistic_regression(
     Returns:
         Dictionary with coefficients, odds ratios, and model fit statistics.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return {"status": "error", "error": f"Dataset '{dataset_name}' not found."}
@@ -971,7 +971,7 @@ def run_mann_whitney(
     Returns:
         StatisticalResult with U-statistic, p-value, and effect size (r).
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return StatisticalResult(
@@ -1066,7 +1066,7 @@ def run_kruskal_wallis(
     Returns:
         StatisticalResult with H-statistic, p-value, and effect size (epsilon-squared).
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return StatisticalResult(
@@ -1293,7 +1293,7 @@ def execute_robustness_check(
     Returns:
         Dictionary with robustness check comparison results.
     """
-    registry = DataRegistry()
+    registry = get_registry()
     
     if dataset_name not in registry.datasets:
         return {"status": "error", "error": f"Dataset '{dataset_name}' not found."}

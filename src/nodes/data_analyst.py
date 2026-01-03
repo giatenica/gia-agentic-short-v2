@@ -50,7 +50,11 @@ from src.tools.llm_interpretation import (
     interpret_hypothesis_test,
     summarize_findings,
 )
-from src.tools.data_loading import list_datasets, query_data
+from src.tools.data_loading import list_datasets, query_data, get_registry
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -496,14 +500,31 @@ def data_analyst_node(state: WorkflowState) -> dict:
     """
     current_date = datetime.now().strftime("%Y-%m-%d")
     
+    # Debug: Check registry state
+    registry = get_registry()
+    available_datasets = list(registry.datasets.keys())
+    logger.info(f"DATA_ANALYST: Registry has {len(available_datasets)} datasets: {available_datasets}")
+    
     # Extract information from state
     data_info = _extract_data_info(state)
     plan_info = _extract_plan_info(state)
     gap_info = _extract_gap_info(state)
     research_question = _get_research_question(state)
     
-    # Get primary dataset
+    # Get primary dataset from state
     dataset_name = _get_primary_dataset(data_info)
+    logger.info(f"DATA_ANALYST: Primary dataset from state: {dataset_name}")
+    logger.info(f"DATA_ANALYST: Loaded datasets in state: {data_info.get('loaded_datasets', [])}")
+    
+    # If dataset_name from state doesn't exist in registry, try to use first available
+    if dataset_name and dataset_name not in registry.datasets:
+        logger.warning(f"DATA_ANALYST: Dataset '{dataset_name}' not in registry. Available: {available_datasets}")
+        if available_datasets:
+            dataset_name = available_datasets[0]
+            logger.info(f"DATA_ANALYST: Using fallback dataset: {dataset_name}")
+    elif not dataset_name and available_datasets:
+        dataset_name = available_datasets[0]
+        logger.info(f"DATA_ANALYST: No dataset in state, using registry dataset: {dataset_name}")
     
     # Validate we have data to analyze
     if not dataset_name and data_info.get("total_rows", 0) == 0:
@@ -636,6 +657,13 @@ def data_analyst_node(state: WorkflowState) -> dict:
     # Identify main findings
     main_findings = [f for f in findings if f.finding_type == FindingType.MAIN_RESULT]
     
+    # Get actual sample size from registry if available
+    actual_sample_size = data_info.get("total_rows", 0)
+    if dataset_name and dataset_name in registry.datasets:
+        dataset_info = registry.datasets[dataset_name]
+        actual_sample_size = dataset_info.get("row_count", actual_sample_size)
+        logger.info(f"DATA_ANALYST: Actual sample size from registry: {actual_sample_size}")
+    
     # Build analysis result
     analysis_approach_enum = None
     if plan_info.get("analysis_approach"):
@@ -648,8 +676,8 @@ def data_analyst_node(state: WorkflowState) -> dict:
         analysis_status=AnalysisStatus.COMPLETE,
         methodology_used=plan_info.get("methodology", ""),
         analysis_approach=analysis_approach_enum,
-        data_summary=f"Analyzed {data_info.get('total_rows', 0)} observations across {len(key_vars)} key variables using {dataset_name}.",
-        sample_size=data_info.get("total_rows", 0),
+        data_summary=f"Analyzed {actual_sample_size} observations across {len(key_vars)} key variables using {dataset_name}.",
+        sample_size=actual_sample_size,
         variables_analyzed=key_vars,
         descriptive_stats=desc_stats if dataset_name and "error" not in (desc_stats or {}) else {},
         findings=findings,
