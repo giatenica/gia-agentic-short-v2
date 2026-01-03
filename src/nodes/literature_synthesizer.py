@@ -9,7 +9,7 @@ This node:
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -66,7 +66,7 @@ def extract_themes(
         papers_text.append(paper_info)
     
     papers_summary = "\n\n".join(papers_text)
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -155,7 +155,7 @@ def identify_gaps(
         papers_summary.append(summary)
     papers_text = "\n".join(papers_summary)
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -260,7 +260,7 @@ def synthesize_literature(
     
     # Group papers by recency and impact
     recent_papers = [r for r in search_results if r.published_date and 
-                     r.published_date.year >= datetime.utcnow().year - 3]
+                     r.published_date.year >= datetime.now(timezone.utc).year - 3]
     highly_cited = sorted(search_results, 
                          key=lambda x: x.citation_count or 0, 
                          reverse=True)[:10]
@@ -271,7 +271,7 @@ def synthesize_literature(
         for r in highly_cited if r.citation_count
     )
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -393,7 +393,7 @@ def generate_contribution_statement(
     opportunities = synthesis.get("contribution_opportunities", [])
     opportunities_text = "\n".join(f"- {opp}" for opp in opportunities[:4])
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     prompt = f"""Current date: {current_date}
 
@@ -559,9 +559,9 @@ def literature_synthesizer_node(state: WorkflowState) -> dict[str, Any]:
                 )
             )],
             "checkpoints": [
-                f"{datetime.utcnow().isoformat()}: Literature synthesis - no results, proceeding data-driven"
+                f"{datetime.now(timezone.utc).isoformat()}: Literature synthesis - no results, proceeding data-driven"
             ],
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
     
     try:
@@ -611,10 +611,10 @@ def literature_synthesizer_node(state: WorkflowState) -> dict[str, Any]:
             "refined_query": refined_query,
             "messages": [AIMessage(content=message)],
             "checkpoints": [
-                f"{datetime.utcnow().isoformat()}: Literature synthesis complete - "
+                f"{datetime.now(timezone.utc).isoformat()}: Literature synthesis complete - "
                 f"{len(themes)} themes, {len(gaps)} gaps identified"
             ],
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
         
     except Exception as e:

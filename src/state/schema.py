@@ -5,7 +5,7 @@ in the LangGraph workflow. It uses TypedDict with annotations for proper
 state management and message accumulation.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Annotated, Any
 
 from langchain_core.messages import AnyMessage
@@ -239,7 +239,7 @@ def create_initial_state(
         )
         ```
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     defaults: WorkflowState = {
         # Intake

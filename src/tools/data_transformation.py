@@ -9,6 +9,7 @@ Provides tools for:
 - Encoding categorical variables
 """
 
+import re
 from typing import Any
 
 from langchain_core.tools import tool
@@ -22,6 +23,36 @@ except ImportError:
     HAS_PANDAS = False
 
 from src.tools.data_loading import get_registry
+
+
+# Security: Blocked patterns in eval expressions (code injection prevention)
+_BLOCKED_EVAL_PATTERNS = [
+    r'__\w+__',          # dunder methods
+    r'\bimport\b',       # import statements
+    r'\bexec\b',         # exec calls
+    r'\beval\b',         # nested eval
+    r'\bopen\b',         # file operations
+    r'\bos\.',           # os module
+    r'\bsys\.',          # sys module
+    r'\bsubprocess\.',   # subprocess module
+    r'@',                # decorators/matmul that might be misused
+]
+
+
+def _validate_eval_expression(expression: str) -> tuple[bool, str | None]:
+    """
+    Validate that an eval expression doesn't contain dangerous patterns.
+    
+    Args:
+        expression: The expression to validate
+        
+    Returns:
+        Tuple of (is_valid, error_message or None)
+    """
+    for pattern in _BLOCKED_EVAL_PATTERNS:
+        if re.search(pattern, expression, re.IGNORECASE):
+            return False, f"Expression contains blocked pattern: {pattern}"
+    return True, None
 
 
 # =============================================================================
@@ -373,6 +404,11 @@ def create_variable(
     # Validate column name to prevent injection
     if not new_column.isidentifier():
         return {"error": f"Invalid column name: '{new_column}'. Must be a valid Python identifier."}
+    
+    # Validate expression for security (prevent code injection)
+    is_valid, error_msg = _validate_eval_expression(expression)
+    if not is_valid:
+        return {"error": f"Invalid expression: {error_msg}"}
     
     try:
         # Use pandas eval only (safe, no exec/eval fallback)

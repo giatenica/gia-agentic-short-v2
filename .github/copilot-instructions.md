@@ -160,9 +160,9 @@ def create_my_agent(
     if tools:
         model = model.bind_tools(tools)
     
-    # ALWAYS include current date in system prompt
-    from datetime import datetime
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    # ALWAYS include current date in system prompt (use timezone-aware datetime)
+    from datetime import datetime, timezone
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     system_content = f"""Current date: {current_date}
 
