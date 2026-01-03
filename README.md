@@ -1,19 +1,51 @@
-# GIA Agentic Research System
+# GIA Agentic Research System v2
 
-LangGraph-based autonomous research system using **Anthropic Claude** for academic research automation. Features a multi-node workflow that takes a research question through literature review, gap analysis, methodology planning, data analysis, and paper writing.
+[![Tests](https://img.shields.io/badge/tests-622%20passed-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-61%25-yellow)](tests/)
+[![Python](https://img.shields.io/badge/python-3.11+-blue)](pyproject.toml)
+[![LangGraph](https://img.shields.io/badge/langgraph-0.2+-purple)](https://github.com/langchain-ai/langgraph)
+
+LangGraph-based autonomous research system using **Anthropic Claude** for academic research automation. Features a multi-node workflow that takes a research question through literature review, gap analysis, methodology planning, data analysis, paper writing, and critical review.
 
 ## Overview
 
-GIA (Gia Tenica) is an AI-powered research assistant that automates the academic research workflow:
+GIA (Gia Tenica) is an AI-powered research assistant that automates the complete academic research workflow:
 
-1. **Intake** - Parse research question, validate inputs, process uploaded data files
-2. **Data Exploration** - Analyze datasets with DuckDB backend (handles 46M+ rows)
-3. **Literature Review** - Search Semantic Scholar, arXiv, and Tavily for papers
-4. **Literature Synthesis** - Extract themes, identify gaps, generate contributions
-5. **Gap Identification** - Analyze literature gaps with human approval checkpoints
-6. **Research Planning** - Design methodology with human approval
-7. **Data Analysis** - Execute statistical analysis using 35+ tools
-8. **Paper Writing** - Generate academic sections with style enforcement
+```
+INTAKE → DATA_EXPLORER → LITERATURE_REVIEWER → LITERATURE_SYNTHESIZER
+                              ↓
+              GAP_IDENTIFIER (human approval checkpoint)
+                              ↓
+                  PLANNER (human approval checkpoint)
+                              ↓
+              ┌───────────────┴───────────────┐
+              ↓                               ↓
+       DATA_ANALYST              CONCEPTUAL_SYNTHESIZER
+       (empirical)                   (theoretical)
+              ↓                               ↓
+              └───────────────┬───────────────┘
+                              ↓
+                           WRITER
+                              ↓
+                          REVIEWER
+                        ↙         ↘
+                   APPROVE       REVISE (max 3)
+                      ↓            ↓
+                   OUTPUT ←───────┘
+                              ↓
+                          FALLBACK (error recovery)
+```
+
+### Key Features
+
+- **10 Workflow Nodes** - Complete research pipeline from intake to publication
+- **Human-in-the-Loop** - Approval checkpoints at gap analysis and planning
+- **Multi-Source Search** - Semantic Scholar, arXiv, and Tavily integration
+- **Data Analysis** - DuckDB backend handles 46M+ rows with 35+ analysis tools
+- **Academic Writing** - Style enforcement with 100+ banned words filter
+- **Self-Critique Loop** - REVIEWER node with revision cycles (max 3)
+- **Error Recovery** - Graceful degradation with fallback node
+- **LangSmith Tracing** - Full observability and debugging
 
 ## Quick Start
 
@@ -55,6 +87,31 @@ Open: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 uv run python -m src.main
 ```
 
+## Workflow Nodes
+
+| Node | Purpose | HITL |
+|------|---------|------|
+| `intake` | Parse form data, validate research question, process uploads | - |
+| `data_explorer` | Parallel dataset loading, schema detection, quality checks | - |
+| `literature_reviewer` | Multi-source academic search (Semantic Scholar, arXiv) | - |
+| `literature_synthesizer` | Theme extraction, findings synthesis, gap identification | - |
+| `gap_identifier` | Analyze gaps, generate refined research question | ✓ |
+| `planner` | Design methodology, assess feasibility | ✓ |
+| `data_analyst` | Execute regressions, correlations, hypothesis tests | - |
+| `conceptual_synthesizer` | Build theoretical frameworks (non-empirical) | - |
+| `writer` | Generate paper sections with style enforcement | - |
+| `reviewer` | Critical evaluation with 5-dimension scoring | - |
+| `output` | Prepare final paper for delivery | - |
+| `fallback` | Generate partial output on errors | - |
+
+### Review Decision Thresholds
+
+| Score Range | Decision | Action |
+|-------------|----------|--------|
+| ≥ 7.0 | APPROVE | Route to OUTPUT |
+| 4.0 - 6.9 | REVISE | Route to WRITER (max 3 iterations) |
+| < 4.0 | REJECT | Route to OUTPUT with rejection note |
+
 ## Project Structure
 
 ```
@@ -64,20 +121,28 @@ gia-agentic-short-v2/
 │   │   ├── base.py          # ReAct agent with tools
 │   │   ├── research.py      # Research-focused agent
 │   │   └── data_analyst.py  # Data analysis agent
-│   ├── nodes/               # LangGraph workflow nodes
+│   ├── nodes/               # LangGraph workflow nodes (10 nodes)
 │   │   ├── intake.py        # Research intake processing
 │   │   ├── data_explorer.py # Dataset analysis (DuckDB)
 │   │   ├── literature_reviewer.py    # Academic search
 │   │   ├── literature_synthesizer.py # Theme extraction
-│   │   ├── gap_identifier.py         # Gap analysis
-│   │   ├── planner.py                # Methodology planning
+│   │   ├── gap_identifier.py         # Gap analysis (HITL)
+│   │   ├── planner.py                # Methodology planning (HITL)
 │   │   ├── data_analyst.py           # Statistical analysis
 │   │   ├── conceptual_synthesizer.py # Theoretical research
-│   │   └── writer.py                 # Paper composition
+│   │   ├── writer.py                 # Paper composition
+│   │   ├── reviewer.py               # Critical review
+│   │   └── fallback.py               # Error recovery
+│   ├── graphs/              # Workflow assembly
+│   │   ├── research_workflow.py  # Main workflow factory
+│   │   ├── routers.py       # Routing functions
+│   │   ├── streaming.py     # Streaming utilities
+│   │   ├── debug.py         # Time travel debugging
+│   │   └── subgraphs.py     # Modular subgraphs
 │   ├── tools/               # 17 tool modules with 35+ tools
 │   │   ├── academic_search.py    # Semantic Scholar, arXiv, Tavily
 │   │   ├── citation_analysis.py  # Citation metrics
-│   │   ├── data_loading.py       # Load CSV, Parquet, Excel, etc.
+│   │   ├── data_loading.py       # CSV, Parquet, Excel, Stata, SPSS
 │   │   ├── data_profiling.py     # Column statistics, distributions
 │   │   ├── data_transformation.py # Filter, join, aggregate
 │   │   ├── analysis.py           # Regression, correlation
@@ -85,11 +150,18 @@ gia-agentic-short-v2/
 │   │   ├── gap_analysis.py       # Literature gap detection
 │   │   ├── methodology.py        # Research design
 │   │   ├── contribution.py       # Contribution framing
-│   │   └── synthesis.py          # Conceptual framework tools
+│   │   └── synthesis.py          # Conceptual framework
 │   ├── state/               # State management
-│   │   ├── schema.py        # WorkflowState TypedDict
+│   │   ├── schema.py        # WorkflowState TypedDict (30+ fields)
 │   │   ├── models.py        # 50+ Pydantic models
 │   │   └── enums.py         # Research status enums
+│   ├── errors/              # Error handling
+│   │   ├── exceptions.py    # Custom exception hierarchy
+│   │   ├── policies.py      # RetryPolicy configurations
+│   │   ├── handlers.py      # Error handler functions
+│   │   └── recovery.py      # Recovery strategies
+│   ├── review/              # Review criteria
+│   │   └── criteria.py      # 5-dimension scoring
 │   ├── cache/               # SQLite-based LLM response caching
 │   ├── citations/           # Citation management (APA style)
 │   ├── style/               # Academic writing style enforcement
@@ -113,40 +185,20 @@ gia-agentic-short-v2/
 │   ├── graphs.py            # LangGraph workflow definition
 │   └── langgraph.json       # Studio configuration
 ├── tests/
-│   └── unit/                # 281 unit tests
+│   ├── unit/                # Unit tests (622 tests)
+│   └── integration/         # Integration tests
+├── evaluation/              # Quality evaluation suite
+│   ├── metrics.py           # Quality metrics
+│   ├── run_evaluation.py    # Evaluation runner
+│   └── test_queries.json    # Test query dataset
 ├── public/
 │   └── research_intake_form.html
-├── docs/                    # Architecture documentation
-└── pyproject.toml
+├── docs/
+│   ├── IMPLEMENTATION_PLAN.md
+│   ├── langgraph_architecture_spec.md
+│   └── writing_style_guide.md
+└── sprints/                 # Sprint documentation
 ```
-
-## Workflow Architecture
-
-```
-INTAKE → DATA_EXPLORER → LITERATURE_REVIEWER → LITERATURE_SYNTHESIZER
-    ↓
-GAP_IDENTIFIER (human approval) → PLANNER (human approval)
-    ↓
-    ├── DATA_ANALYST (empirical research)
-    │       ↓
-    └── CONCEPTUAL_SYNTHESIZER (theoretical)
-            ↓
-        WRITER → END
-```
-
-### Node Descriptions
-
-| Node | Purpose |
-|------|---------|
-| `intake` | Parse form data, validate research question, process uploads |
-| `data_explorer` | Parallel loading of datasets, schema detection, quality assessment |
-| `literature_reviewer` | Generate search queries, execute multi-source academic search |
-| `literature_synthesizer` | Extract themes, synthesize findings, identify gaps |
-| `gap_identifier` | Analyze gaps, generate refined question (with interrupt) |
-| `planner` | Design methodology, assess feasibility (with interrupt) |
-| `data_analyst` | Execute regressions, correlations, hypothesis tests |
-| `conceptual_synthesizer` | Build theoretical frameworks |
-| `writer` | Generate paper sections with style enforcement |
 
 ## Data Analysis Tools
 
@@ -164,7 +216,7 @@ The system includes 35+ tools organized into categories:
 
 ### Transformation
 - `filter_data` - Row filtering with expressions
-- `create_variable` - Computed columns (safe eval with input validation)
+- `create_variable` - Computed columns (safe eval)
 - `merge_datasets` - Join operations
 - `aggregate_data` - Group-by summaries
 
@@ -178,7 +230,32 @@ The system includes 35+ tools organized into categories:
 - `generate_insights` - Key finding summaries
 - `suggest_analyses` - Next-step recommendations
 
-## Caching System
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | ✅ |
+| `LANGSMITH_API_KEY` | LangSmith API key for tracing | ✅ |
+| `TAVILY_API_KEY` | Tavily API key for web search | ✅ |
+| `LANGSMITH_TRACING` | Enable tracing (default: true) | ❌ |
+| `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |
+| `CACHE_ENABLED` | Enable LLM response caching | ❌ |
+| `CACHE_PATH` | SQLite cache location | ❌ |
+| `CACHE_TTL_LITERATURE` | Literature search cache TTL | ❌ |
+| `CACHE_TTL_SYNTHESIS` | Synthesis nodes cache TTL | ❌ |
+| `CACHE_TTL_WRITER` | Writer node cache TTL | ❌ |
+
+### Model Configuration
+
+| Task Type | Model | Use Case |
+|-----------|-------|----------|
+| Complex Reasoning | `claude-opus-4-5-20251101` | Research, scientific analysis |
+| General/Coding | `claude-sonnet-4-5-20250929` | Default for most tasks |
+| High-Volume | `claude-haiku-4-5-20251001` | Classification, extraction |
+
+### Caching System
 
 LLM responses are cached in SQLite to speed up development:
 
@@ -195,39 +272,64 @@ export CACHE_TTL_WRITER=600        # 10 minutes
 ## Testing
 
 ```bash
-# Run all 281 tests
+# Run all tests (622 tests)
 uv run pytest tests/ -v
 
-# Run specific test file
-uv run pytest tests/unit/test_data_explorer.py -v
+# Run unit tests only
+uv run pytest tests/unit/ -v
+
+# Run integration tests
+uv run pytest tests/integration/ -v
 
 # Run with coverage
 uv run pytest --cov=src tests/
+
+# Run specific test file
+uv run pytest tests/unit/test_reviewer.py -v
 ```
 
-## Environment Variables
+### Evaluation Suite
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | ✅ |
-| `LANGSMITH_API_KEY` | LangSmith API key for tracing | ✅ |
-| `TAVILY_API_KEY` | Tavily API key for web search | ✅ |
-| `LANGSMITH_TRACING` | Enable tracing (default: true) | ❌ |
-| `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |
-| `CACHE_ENABLED` | Enable LLM response caching | ❌ |
-| `CACHE_PATH` | SQLite cache location | ❌ |
-| `CACHE_TTL_DEFAULT` | Default cache TTL in seconds | ❌ |
-| `CACHE_TTL_LITERATURE` | Literature search cache TTL | ❌ |
-| `CACHE_TTL_SYNTHESIS` | Synthesis nodes cache TTL | ❌ |
-| `CACHE_TTL_WRITER` | Writer node cache TTL | ❌ |
+```bash
+# Run evaluation with test queries
+python -m evaluation.run_evaluation
 
-## Model Configuration
+# Run specific query
+python -m evaluation.run_evaluation --query-id crypto-001
 
-| Task Type | Model | Use Case |
-|-----------|-------|----------|
-| Complex Reasoning | `claude-opus-4-5-20251101` | Research, scientific analysis |
-| General/Coding | `claude-sonnet-4-5-20250929` | Default for most tasks |
-| High-Volume | `claude-haiku-4-5-20251001` | Classification, extraction |
+# Use mock responses for testing
+python -m evaluation.run_evaluation --mock
+
+# Dry run (show what would be evaluated)
+python -m evaluation.run_evaluation --dry-run
+```
+
+## Error Handling
+
+The system implements comprehensive error handling with graceful degradation:
+
+- **RetryPolicy** - Exponential backoff with jitter for API calls
+- **Recovery Strategies** - RETRY, SKIP, FALLBACK, ABORT
+- **Fallback Node** - Generates partial output on unrecoverable errors
+- **Max 3 retries** before fallback activation
+
+### Exception Hierarchy
+
+```
+GIAError (base)
+├── WorkflowError
+├── NodeExecutionError
+├── ToolExecutionError
+├── APIError
+│   └── RateLimitError
+├── ContextOverflowError
+├── DataValidationError
+├── SearchError
+│   └── LiteratureSearchError
+├── AnalysisError
+├── WritingError
+└── ReviewError
+```
 
 ## Development
 
@@ -238,21 +340,29 @@ uv sync --all-extras
 # Run tests
 uv run pytest
 
-# Run specific tests
-uv run pytest tests/unit/test_intake.py -v
-
 # Run LangGraph Studio
 cd studio && uv run langgraph dev
+
+# Type checking
+uv run mypy src/
+
+# Linting
+uv run ruff check src/
 ```
 
 ## Security
 
 - API keys loaded from environment variables (never hardcoded)
 - ZIP extraction protected against zip bombs and path traversal
-- Safe expression evaluation (regex-based pattern blocking, no `eval()` on user input)
-- Expression validation blocks code injection patterns
+- Safe expression evaluation (regex-based pattern blocking)
 - CORS restricted to localhost in development
 - Timezone-aware datetime handling (UTC)
+
+## Documentation
+
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) - Sprint-by-sprint development guide
+- [Architecture Spec](docs/langgraph_architecture_spec.md) - Detailed architecture specification
+- [Writing Style Guide](docs/writing_style_guide.md) - Academic writing standards
 
 ## Author
 

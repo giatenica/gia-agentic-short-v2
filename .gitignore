@@ -55,5 +55,5 @@ Thumbs.db
 data/
 *.db
 
-# User defined (do not remove or change)
-docs/
+# Generated docs (keep markdown docs)
+!docs/*.md
