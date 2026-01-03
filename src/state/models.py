@@ -2549,3 +2549,272 @@ def get_section_word_count_target(paper_type: str, section_type: str) -> tuple[i
     if paper_type in SECTION_WORD_COUNTS:
         return SECTION_WORD_COUNTS[paper_type].get(section_type)
     return None
+
+
+# =============================================================================
+# Sprint 7: REVIEWER Node Models
+# =============================================================================
+
+
+class QualityScore(BaseModel):
+    """Quality score for a single evaluation dimension."""
+    
+    dimension: str = Field(
+        ...,
+        description="Dimension being evaluated (contribution, methodology, etc.)"
+    )
+    score: float = Field(
+        ...,
+        ge=1.0,
+        le=10.0,
+        description="Score from 1-10"
+    )
+    justification: str = Field(
+        ...,
+        min_length=10,
+        max_length=1000,
+        description="Justification for the score"
+    )
+    strengths: list[str] = Field(
+        default_factory=list,
+        description="Identified strengths in this dimension"
+    )
+    weaknesses: list[str] = Field(
+        default_factory=list,
+        description="Identified weaknesses in this dimension"
+    )
+
+
+class ReviewCritiqueItem(BaseModel):
+    """A specific critique or issue identified in the paper by the REVIEWER node."""
+    
+    section: str = Field(
+        ...,
+        description="Section where the issue was found"
+    )
+    issue: str = Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="Description of the issue"
+    )
+    severity: str = Field(
+        ...,
+        description="Severity: critical, major, minor, suggestion"
+    )
+    suggestion: str = Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="Suggested fix or improvement"
+    )
+    line_reference: str | None = Field(
+        default=None,
+        description="Optional reference to specific location in text"
+    )
+
+
+class ReviewCritique(BaseModel):
+    """Complete critique from the REVIEWER node."""
+    
+    # Overall assessment
+    overall_score: float = Field(
+        ...,
+        ge=1.0,
+        le=10.0,
+        description="Overall quality score (weighted average)"
+    )
+    decision: str = Field(
+        ...,
+        description="Review decision: approve, revise, or reject"
+    )
+    
+    # Dimension scores
+    dimension_scores: list[QualityScore] = Field(
+        default_factory=list,
+        description="Scores for each quality dimension"
+    )
+    
+    # Detailed critique items
+    critique_items: list[ReviewCritiqueItem] = Field(
+        default_factory=list,
+        description="List of specific issues identified"
+    )
+    
+    # Summary
+    summary: str = Field(
+        default="",
+        max_length=2000,
+        description="Executive summary of the review"
+    )
+    
+    # Revision instructions (if revise decision)
+    revision_instructions: str = Field(
+        default="",
+        max_length=3000,
+        description="Specific instructions for revision"
+    )
+    
+    # Metadata
+    reviewer_id: str = Field(
+        default="gia-reviewer",
+        description="Identifier for the reviewer"
+    )
+    reviewed_at: datetime = Field(
+        default_factory=_utc_now,
+        description="When the review was completed"
+    )
+    iteration: int = Field(
+        default=1,
+        ge=1,
+        description="Which revision iteration this review is for"
+    )
+    
+    def get_score_by_dimension(self, dimension: str) -> float | None:
+        """Get score for a specific dimension."""
+        for score in self.dimension_scores:
+            if score.dimension == dimension:
+                return score.score
+        return None
+    
+    def get_critical_items(self) -> list[ReviewCritiqueItem]:
+        """Get all critical severity items."""
+        return [item for item in self.critique_items if item.severity == "critical"]
+    
+    def get_items_by_section(self, section: str) -> list[ReviewCritiqueItem]:
+        """Get all critique items for a specific section."""
+        return [item for item in self.critique_items if item.section == section]
+    
+    def has_critical_issues(self) -> bool:
+        """Check if there are any critical issues."""
+        return len(self.get_critical_items()) > 0
+
+
+class RevisionRequest(BaseModel):
+    """Request for revision from REVIEWER to WRITER."""
+    
+    sections_to_revise: list[str] = Field(
+        default_factory=list,
+        description="List of section types that need revision"
+    )
+    critique_items: list[ReviewCritiqueItem] = Field(
+        default_factory=list,
+        description="Critique items to address"
+    )
+    revision_instructions: str = Field(
+        default="",
+        max_length=3000,
+        description="Overall revision guidance"
+    )
+    iteration_count: int = Field(
+        default=1,
+        ge=1,
+        description="Current revision iteration"
+    )
+    max_iterations: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum allowed iterations"
+    )
+    priority_order: list[str] = Field(
+        default_factory=list,
+        description="Sections in order of revision priority"
+    )
+    
+    def is_final_iteration(self) -> bool:
+        """Check if this is the final allowed iteration."""
+        return self.iteration_count >= self.max_iterations
+
+
+class ReviewerOutput(BaseModel):
+    """Output from the REVIEWER node."""
+    
+    # The critique
+    critique: ReviewCritique = Field(
+        ...,
+        description="The detailed critique"
+    )
+    
+    # Decision and routing
+    decision: str = Field(
+        ...,
+        description="Review decision: approve, revise, reject"
+    )
+    
+    # Revision request (if decision is revise)
+    revision_request: RevisionRequest | None = Field(
+        default=None,
+        description="Revision request if revisions needed"
+    )
+    
+    # Human approval tracking
+    human_approved: bool = Field(
+        default=False,
+        description="Whether human has approved the decision"
+    )
+    human_feedback: str | None = Field(
+        default=None,
+        description="Optional feedback from human reviewer"
+    )
+    
+    # Final output (if approved)
+    final_paper: str | None = Field(
+        default=None,
+        description="Final paper content in markdown (if approved)"
+    )
+    
+    # Timestamps
+    created_at: datetime = Field(
+        default_factory=_utc_now,
+        description="When the review was created"
+    )
+
+
+# Quality thresholds for review decisions
+REVIEW_THRESHOLDS = {
+    "approve": 7.0,      # Score >= 7.0 -> approve
+    "revise_min": 4.0,   # Score >= 4.0 and < 7.0 -> revise
+    "reject": 4.0,       # Score < 4.0 -> reject
+}
+
+# Dimension weights for overall score calculation
+DIMENSION_WEIGHTS = {
+    "contribution": 0.25,
+    "methodology": 0.25,
+    "evidence": 0.20,
+    "coherence": 0.15,
+    "writing": 0.15,
+}
+
+
+def calculate_overall_score(dimension_scores: list[QualityScore]) -> float:
+    """Calculate weighted overall score from dimension scores."""
+    total_weight = 0.0
+    weighted_sum = 0.0
+    
+    for score in dimension_scores:
+        weight = DIMENSION_WEIGHTS.get(score.dimension, 0.1)
+        weighted_sum += score.score * weight
+        total_weight += weight
+    
+    if total_weight == 0:
+        return 5.0  # Default middle score
+    
+    return weighted_sum / total_weight
+
+
+def determine_review_decision(overall_score: float, has_critical_items: bool) -> str:
+    """Determine review decision based on score and critical items."""
+    # Critical items always force revision at minimum
+    if has_critical_items:
+        if overall_score < REVIEW_THRESHOLDS["reject"]:
+            return "reject"
+        return "revise"
+    
+    # Score-based decision
+    if overall_score >= REVIEW_THRESHOLDS["approve"]:
+        return "approve"
+    elif overall_score >= REVIEW_THRESHOLDS["revise_min"]:
+        return "revise"
+    else:
+        return "reject"

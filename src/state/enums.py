@@ -375,3 +375,35 @@ class JournalTarget(str, Enum):
     JFQA = "jfqa"            # Journal of Financial and Quantitative Analysis
     MANAGEMENT_SCIENCE = "management_science"
     GENERIC = "generic"      # Generic academic style
+
+
+# =============================================================================
+# Sprint 7: REVIEWER Node Enums
+# =============================================================================
+
+
+class ReviewDecision(str, Enum):
+    """Decision from the REVIEWER node."""
+    
+    APPROVE = "approve"      # Paper meets quality standards
+    REVISE = "revise"        # Paper needs revision
+    REJECT = "reject"        # Paper has fundamental issues
+
+
+class ReviewDimension(str, Enum):
+    """Dimensions of paper quality to evaluate."""
+    
+    CONTRIBUTION = "contribution"    # Novelty, significance, clarity
+    METHODOLOGY = "methodology"      # Rigor, appropriateness, reproducibility
+    EVIDENCE = "evidence"            # Data quality, analysis validity
+    COHERENCE = "coherence"          # Logical flow, argument structure
+    WRITING = "writing"              # Academic tone, clarity, style
+
+
+class RevisionPriority(str, Enum):
+    """Priority of revision items."""
+    
+    CRITICAL = "critical"    # Must fix before approval
+    HIGH = "high"            # Strongly recommended
+    MEDIUM = "medium"        # Should address
+    LOW = "low"              # Nice to have

@@ -49,6 +49,10 @@ from src.nodes.writer import (
     build_section_context,
     SECTION_ORDER,
 )
+from src.nodes.reviewer import (
+    reviewer_node,
+    route_after_reviewer,
+)
 
 __all__ = [
     # Intake node
@@ -97,4 +101,7 @@ __all__ = [
     "get_section_writer",
     "build_section_context",
     "SECTION_ORDER",
+    # Reviewer node (Sprint 7)
+    "reviewer_node",
+    "route_after_reviewer",
 ]
