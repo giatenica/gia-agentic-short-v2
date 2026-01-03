@@ -58,6 +58,11 @@ from src.nodes.fallback import (
     should_fallback,
     route_to_fallback_or_continue,
 )
+from src.nodes.data_acquisition import (
+    data_acquisition_node,
+    route_after_acquisition,
+    should_skip_acquisition,
+)
 
 __all__ = [
     # Intake node
@@ -113,4 +118,8 @@ __all__ = [
     "fallback_node",
     "should_fallback",
     "route_to_fallback_or_continue",
+    # Data acquisition node (Sprint 14)
+    "data_acquisition_node",
+    "route_after_acquisition",
+    "should_skip_acquisition",
 ]

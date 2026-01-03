@@ -296,9 +296,12 @@ def route_by_research_type(state: WorkflowState) -> Literal["data_analyst", "con
     return "data_analyst"
 
 
-def route_after_planner(state: WorkflowState) -> Literal["data_analyst", "conceptual_synthesizer", "fallback", "__end__"]:
+def route_after_planner(state: WorkflowState) -> Literal["data_acquisition", "conceptual_synthesizer", "fallback", "__end__"]:
     """
-    Route after planner to analysis nodes based on research type.
+    Route after planner to data acquisition or directly to conceptual synthesizer.
+    
+    For empirical research: routes to data_acquisition for external data fetching
+    For theoretical research: routes directly to conceptual_synthesizer
     Routes to fallback if too many errors accumulated.
     
     Args:
@@ -333,6 +336,61 @@ def route_after_planner(state: WorkflowState) -> Literal["data_analyst", "concep
     if approval_status == "rejected":
         logger.info("Plan rejected, ending workflow")
         return "__end__"
+    
+    # Theoretical research goes directly to conceptual synthesizer (no data acquisition needed)
+    methodology = None
+    if isinstance(plan, dict):
+        methodology = plan.get("methodology_type") or plan.get("methodology")
+    elif hasattr(plan, "methodology_type"):
+        methodology = plan.methodology_type
+    
+    if methodology and str(methodology).lower() in THEORETICAL_METHODOLOGIES:
+        logger.info("Routing to conceptual_synthesizer: theoretical methodology")
+        return "conceptual_synthesizer"
+    
+    # Empirical research goes through data acquisition
+    logger.info("Routing to data_acquisition: empirical methodology")
+    return "data_acquisition"
+
+
+def route_after_data_acquisition(state: WorkflowState) -> Literal["data_analyst", "conceptual_synthesizer", "fallback", "__end__"]:
+    """
+    Route after data acquisition based on research type and acquisition results.
+    
+    Routes to:
+    - data_analyst: if data was successfully acquired for empirical analysis
+    - conceptual_synthesizer: if research is theoretical
+    - fallback: if critical data acquisition failures
+    - __end__: if unrecoverable errors
+    
+    Args:
+        state: Current workflow state
+        
+    Returns:
+        Next node name, "fallback", or "__end__"
+    """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from data_acquisition due to errors")
+        return "fallback"
+    
+    if state.get("errors"):
+        return "__end__"
+    
+    # Check for critical acquisition failures
+    failures = state.get("acquisition_failures", [])
+    if failures:
+        # Check if any required data is missing
+        for failure in failures:
+            if isinstance(failure, dict):
+                req = failure.get("requirement", {})
+                priority = req.get("priority", "required")
+            else:
+                priority = getattr(failure.requirement.priority, "value", "required") if hasattr(failure, "requirement") else "required"
+            
+            if priority == "required":
+                logger.warning("Routing to fallback: required data acquisition failed")
+                return "fallback"
     
     # Route based on research type
     return route_by_research_type(state)

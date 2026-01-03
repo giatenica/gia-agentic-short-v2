@@ -469,3 +469,38 @@ class DataStructureType(str, Enum):
     POOLED = "pooled"                      # Pooled cross-sections
     HIERARCHICAL = "hierarchical"          # Nested/multilevel structure
     UNKNOWN = "unknown"                    # Structure could not be determined
+
+
+# =============================================================================
+# Sprint 14: Data Acquisition Enums
+# =============================================================================
+
+
+class DataRequirementPriority(str, Enum):
+    """Priority level for data requirements."""
+    
+    REQUIRED = "required"      # Must have this data for analysis
+    PREFERRED = "preferred"    # Strongly desired but can proceed without
+    OPTIONAL = "optional"      # Nice to have but not essential
+
+
+class AcquisitionStatus(str, Enum):
+    """Status of a data acquisition task."""
+    
+    PENDING = "pending"              # Not yet attempted
+    IN_PROGRESS = "in_progress"      # Currently acquiring
+    SUCCESS = "success"              # Successfully acquired
+    PARTIAL = "partial"              # Partially acquired (some data missing)
+    FAILED = "failed"                # Failed to acquire
+    SKIPPED = "skipped"              # Skipped (e.g., already available)
+
+
+class CodeExecutionStatus(str, Enum):
+    """Status of code execution."""
+    
+    NOT_EXECUTED = "not_executed"    # Not yet run
+    RUNNING = "running"              # Currently executing
+    SUCCESS = "success"              # Executed successfully
+    ERROR = "error"                  # Runtime error
+    TIMEOUT = "timeout"              # Exceeded time limit
+    VALIDATION_FAILED = "validation_failed"  # Code failed safety checks

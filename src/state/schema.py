@@ -35,6 +35,11 @@ from src.state.models import (
     ReviewCritique,
     RevisionRequest,
     ReviewerOutput,
+    # Sprint 14 models
+    DataAcquisitionPlan,
+    AcquiredDataset,
+    AcquisitionFailure,
+    CodeSnippet,
 )
 from src.state.enums import ResearchStatus
 
@@ -222,6 +227,22 @@ class WorkflowState(TypedDict, total=False):
     
     # Human feedback on the review
     human_feedback: str | None
+    
+    # =========================================================================
+    # Sprint 14: Data Acquisition Context
+    # =========================================================================
+    
+    # Plan for acquiring external data
+    data_acquisition_plan: DataAcquisitionPlan | dict[str, Any] | None
+    
+    # Successfully acquired datasets
+    acquired_datasets: list[AcquiredDataset]
+    
+    # Failed acquisition attempts
+    acquisition_failures: list[AcquisitionFailure]
+    
+    # Generated code snippets for custom acquisition
+    generated_code_snippets: list[CodeSnippet]
     
     # =========================================================================
     # Workflow Metadata
