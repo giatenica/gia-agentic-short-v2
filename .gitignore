@@ -48,6 +48,9 @@ Thumbs.db
 # LangGraph
 .langgraph/
 
+# Binary LangGraph checkpoint files (.pckl) which should remain untracked.
+*.pckl
+
 # Cache
 data/
 *.db

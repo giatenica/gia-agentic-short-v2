@@ -1494,12 +1494,55 @@ The reviewer simulates a journal referee, applying critical evaluation:
 
 ---
 
-### Sprint 8: Graph Assembly and Full Workflow Integration
-**Duration:** 4-5 days  
+### Sprint 8: Graph Assembly and Full Workflow Integration (Complete)
+**Duration:** 1 day  
+**Status:** ✅ Completed January 2026
 **Goal:** Wire all nodes into complete academic research workflow
 
 This sprint assembles all nodes into the proper academic research sequence:
-1. INTAKE → 2. LITERATURE_REVIEWER → 3. GAP_IDENTIFIER → 4. PLANNER → 5. DATA_ANALYST/CONCEPTUAL_SYNTHESIZER → 6. WRITER → 7. REVIEWER → OUTPUT
+1. INTAKE → 2. DATA_EXPLORER → 3. LITERATURE_REVIEWER → 4. LITERATURE_SYNTHESIZER → 5. GAP_IDENTIFIER → 6. PLANNER → 7. DATA_ANALYST/CONCEPTUAL_SYNTHESIZER → 8. WRITER → 9. REVIEWER → OUTPUT
+
+#### Completed Implementation
+
+A new `src/graphs/` module was created with the following structure:
+
+```
+src/graphs/
+├── __init__.py              # Module exports (20+ functions/classes)
+├── routers.py               # All routing functions (~310 lines)
+├── research_workflow.py     # Main workflow factory (~370 lines)
+├── streaming.py             # Streaming utilities (~230 lines)
+├── debug.py                 # Time travel/debugging (~340 lines)
+└── subgraphs.py             # Modular subgraphs (~300 lines)
+```
+
+#### Key Components
+
+1. **WorkflowConfig Dataclass** - Flexible configuration for workflow compilation
+   - Supports custom checkpointer, store, cache
+   - Configurable interrupt points
+   - Debug mode toggle
+
+2. **Factory Functions**
+   - `create_research_workflow(config)` - Main factory
+   - `create_studio_workflow()` - LangGraph Studio
+   - `create_production_workflow(db_path)` - SQLite persistence
+
+3. **Streaming Utilities**
+   - `StreamMode` enum (VALUES, UPDATES, MESSAGES, DEBUG)
+   - `StreamEvent` dataclass for structured events
+   - Async streaming generators
+   - SSE and WebSocket formatters
+
+4. **Debug Utilities**
+   - `WorkflowInspector` class for time travel
+   - `StateSnapshot` for checkpoint inspection
+   - Replay and fork capabilities
+
+5. **Subgraphs** - Modular composition for:
+   - Literature review pipeline
+   - Analysis pipeline
+   - Writing pipeline
 
 #### LangGraph Capabilities Used
 - Full `StateGraph` assembly with all nodes
@@ -1510,145 +1553,19 @@ This sprint assembles all nodes into the proper academic research sequence:
 - **Subgraphs** for modular composition
 - `interrupt_before` / `interrupt_after` for HITL gates
 
-#### Tasks
+#### Acceptance Criteria (All Met)
+- [x] Full workflow executes: INTAKE → DATA_EXPLORER → LIT_REVIEW → SYNTHESIZER → GAP → PLAN → ANALYZE → WRITE → REVIEW → OUTPUT
+- [x] Research type routing works (empirical vs theoretical)
+- [x] HITL gates pause at gap identification, planning, and final review
+- [x] Workflow is resumable from any checkpoint
+- [x] Streaming provides real-time progress to UI
+- [x] Time travel debugging works
+- [x] 71 tests for Sprint 8 functionality
+- [x] Full test suite passes (400 tests)
 
-1. **Build main graph** (`src/graphs/research_workflow.py`)
-   ```python
-   from langgraph.graph import StateGraph, START, END
-   from langgraph.checkpoint.sqlite import SqliteSaver
-   from langgraph.store.memory import InMemoryStore
-   from langgraph.types import RetryPolicy, CachePolicy
-   
-   graph = StateGraph(WorkflowState)
-   
-   # Add all nodes in academic research sequence
-   graph.add_node("intake", intake_node)
-   graph.add_node("literature_reviewer", literature_reviewer_node,
-                  retry_policy=RetryPolicy(max_attempts=3))
-   graph.add_node("lit_synthesizer", synthesize_literature)
-   graph.add_node("gap_identifier", gap_identifier_node)
-   graph.add_node("planner", planner_node)
-   graph.add_node("data_analyst", data_analyst_node,
-                  cache_policy=CachePolicy(ttl=3600))
-   graph.add_node("conceptual_synthesizer", conceptual_synthesizer_node)
-   graph.add_node("writer", writer_node)
-   graph.add_node("reviewer", reviewer_node)
-   graph.add_node("output", output_node)
-   
-   # Academic research sequence edges
-   graph.add_edge(START, "intake")
-   graph.add_edge("intake", "literature_reviewer")
-   graph.add_edge("literature_reviewer", "lit_synthesizer")
-   graph.add_edge("lit_synthesizer", "gap_identifier")
-   graph.add_edge("gap_identifier", "planner")
-   
-   # Research type routing after planner
-   graph.add_conditional_edges(
-       "planner",
-       route_by_research_type,
-       {
-           "data_analyst": "data_analyst",
-           "conceptual_synthesizer": "conceptual_synthesizer"
-       }
-   )
-   
-   # Both analysis paths lead to writer
-   graph.add_edge("data_analyst", "writer")
-   graph.add_edge("conceptual_synthesizer", "writer")
-   
-   # Review loop
-   graph.add_edge("writer", "reviewer")
-   graph.add_conditional_edges(
-       "reviewer",
-       route_after_review,
-       {
-           "approve": "output",
-           "revise": "writer"
-       }
-   )
-   graph.add_edge("output", END)
-   
-   # Compile with HITL gates at critical points
-   checkpointer = SqliteSaver.from_conn_string("sqlite:///research.db")
-   store = InMemoryStore()
-   
-   app = graph.compile(
-       checkpointer=checkpointer,
-       store=store,
-       interrupt_before=["gap_identifier", "planner"],  # Review refined question and plan
-       interrupt_after=["reviewer"]  # Final approval gate
-   )
-   ```
-
-2. **Implement streaming for UI** (`src/graphs/streaming.py`)
-   ```python
-   async def stream_research_workflow(
-       form_data: dict,
-       thread_id: str
-   ) -> AsyncGenerator[dict, None]:
-       """Stream workflow progress to UI."""
-       
-       config = {"configurable": {"thread_id": thread_id}}
-       
-       async for event in app.astream(
-           {"form_data": form_data},
-           config=config,
-           stream_mode=["updates", "messages", "custom"]
-       ):
-           mode, data = event[0], event[1]
-           
-           if mode == "messages":
-               yield {"type": "token", "content": data}
-           elif mode == "custom":
-               yield {"type": "progress", "stage": data}
-           elif mode == "updates":
-               yield {"type": "state", "node": data}
-   ```
-
-3. **Add time travel and debugging** (`src/graphs/debug.py`)
-   ```python
-   def inspect_workflow_state(thread_id: str):
-       """Inspect current and historical state."""
-       config = {"configurable": {"thread_id": thread_id}}
-       
-       # Current state
-       current = app.get_state(config)
-       print(f"Current node: {current.next}")
-       print(f"Status: {current.values.get('status')}")
-       
-       # History
-       for snapshot in app.get_state_history(config):
-           print(f"{snapshot.created_at}: {snapshot.next}")
-   
-   def replay_from_checkpoint(thread_id: str, checkpoint_index: int):
-       """Replay workflow from specific checkpoint."""
-       config = {"configurable": {"thread_id": thread_id}}
-       history = list(app.get_state_history(config))
-       
-       if checkpoint_index < len(history):
-           old_config = history[checkpoint_index].config
-           return app.invoke(None, old_config)
-   ```
-
-4. **Update Studio graphs** (`studio/graphs.py`)
-   ```python
-   # Export for LangGraph Studio
-   from src.graphs.research_workflow import create_research_workflow
-   
-   # Studio manages its own persistence
-   research_graph = create_research_workflow(
-       checkpointer=None,
-       store=None
-   )
-   ```
-
-#### Acceptance Criteria
-- [ ] Full workflow executes: INTAKE → LIT_REVIEW → GAP → PLAN → ANALYZE → WRITE → REVIEW → OUTPUT
-- [ ] Research type routing works (empirical vs theoretical)
-- [ ] HITL gates pause at gap identification, planning, and final review
-- [ ] Workflow is resumable from any checkpoint
-- [ ] Streaming provides real-time progress to UI
-- [ ] Time travel debugging works
+#### Documentation
+- See `sprints/SPRINT_8.md` for detailed implementation notes
+- See `src/graphs/__init__.py` for public API
 
 ---
 
