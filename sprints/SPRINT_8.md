@@ -181,15 +181,15 @@ WORKFLOW_NODES = [
 
 ### Interrupt Points
 ```python
-INTERRUPT_BEFORE_NODES = ["gap_identifier", "planner", "reviewer"]
+INTERRUPT_BEFORE_NODES = ["gap_identifier", "planner"]
 INTERRUPT_AFTER_NODES = ["reviewer"]
 ```
 
 ### Theoretical Methodologies
 ```python
 THEORETICAL_METHODOLOGIES = {
-    "systematic_review", "meta_analysis", "conceptual_framework",
-    "theoretical_synthesis", "critical_analysis", "literature_review"
+    "analytical_model", "simulation", "conceptual_framework",
+    "systematic_review", "meta_analysis", "narrative_review"
 }
 ```
 

@@ -9,6 +9,8 @@ This module provides:
 
 from src.graphs.research_workflow import (
     create_research_workflow,
+    create_studio_workflow,
+    create_production_workflow,
     WorkflowConfig,
     INTERRUPT_BEFORE_NODES,
     INTERRUPT_AFTER_NODES,
@@ -44,6 +46,8 @@ from src.graphs.routers import (
 __all__ = [
     # Main workflow
     "create_research_workflow",
+    "create_studio_workflow",
+    "create_production_workflow",
     "WorkflowConfig",
     "INTERRUPT_BEFORE_NODES",
     "INTERRUPT_AFTER_NODES",

@@ -9,8 +9,8 @@ This module tests:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime
+from unittest.mock import patch, MagicMock
+from datetime import datetime, timezone
 
 from src.graphs.research_workflow import (
     create_research_workflow,
@@ -47,8 +47,6 @@ from src.graphs.debug import (
     StateSnapshot,
     WorkflowStatus,
     inspect_workflow_state,
-    get_state_history,
-    get_state_at_node,
     WorkflowInspector,
 )
 from src.graphs.subgraphs import (
@@ -645,7 +643,7 @@ class TestStateSnapshot:
         snapshot = StateSnapshot(
             checkpoint_id="cp-123",
             thread_id="thread-1",
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
             node="planner",
             next_nodes=["data_analyst"],
             values={"status": "planning"},
@@ -848,8 +846,6 @@ class TestWorkflowIntegration:
         
     def test_all_routers_return_valid_nodes(self, minimal_state):
         """Test that all routers return valid node names or __end__."""
-        valid_results = WORKFLOW_NODES + ["__end__"]
-        
         # Create various states and test each router
         states = [
             minimal_state,
@@ -868,7 +864,10 @@ class TestWorkflowIntegration:
             route_after_reviewer,
         ]
         
+        # All valid routing destinations
+        all_valid_destinations = set(WORKFLOW_NODES) | {"__end__"}
+        
         for router in routers:
             for state in states:
                 result = router(state)
-                assert result in valid_results or result in ["data_analyst", "conceptual_synthesizer", "literature_reviewer", "gap_identifier", "planner", "writer", "reviewer", "output", "literature_synthesizer"]
+                assert result in all_valid_destinations, f"{router.__name__} returned invalid destination: {result}"

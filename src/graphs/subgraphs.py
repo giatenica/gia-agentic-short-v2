@@ -10,7 +10,6 @@ from typing import Literal
 from langgraph.graph import StateGraph, START, END
 
 from src.state.schema import WorkflowState
-from src.state.enums import ResearchStatus
 from src.nodes import (
     literature_reviewer_node,
     literature_synthesizer_node,
@@ -20,7 +19,6 @@ from src.nodes import (
 from src.graphs.routers import (
     route_after_literature_reviewer,
     route_by_research_type,
-    route_after_analysis,
 )
 from src.cache import get_cache_policy
 from src.config import settings
@@ -135,7 +133,17 @@ def create_analysis_subgraph(
     
     # Entry node that routes to appropriate analysis
     def analysis_router_node(state: WorkflowState) -> dict:
-        """Entry node that records the routing decision."""
+        """Entry node that records the routing decision.
+
+        This node computes the appropriate analysis branch using
+        :func:`route_by_research_type` and stores the result under the
+        private ``_analysis_route`` key on the workflow state.
+
+        The ``_analysis_route`` key is an internal routing hint used only
+        within this analysis subgraph. It is not part of the public
+        WorkflowState schema, and other nodes should treat it as an
+        optional, implementation-specific field.
+        """
         route = route_by_research_type(state)
         logger.info(f"Analysis router: routing to {route}")
         return {"_analysis_route": route}
@@ -211,8 +219,8 @@ def create_writing_subgraph(
     
     # Output node for this subgraph
     def subgraph_output(state: WorkflowState) -> dict:
-        """Mark subgraph as complete."""
-        return {"_writing_complete": True}
+        """Output node for writing subgraph; does not modify state."""
+        return {}
     
     subgraph.add_node("output", subgraph_output)
     
