@@ -13,7 +13,7 @@ Key LangGraph features used:
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -64,7 +64,7 @@ def generate_search_queries(
         api_key=settings.anthropic_api_key,
     )
     
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     key_vars_str = ", ".join(key_variables) if key_variables else "not specified"
     
     prompt = f"""Current date: {current_date}
@@ -397,7 +397,7 @@ def literature_reviewer_node(state: WorkflowState) -> dict[str, Any]:
                     "This may indicate a very novel research area or network issues."
                 )],
                 "checkpoints": [
-                    f"{datetime.utcnow().isoformat()}: Literature review - no results found"
+                    f"{datetime.now(timezone.utc).isoformat()}: Literature review - no results found"
                 ],
             }
         
@@ -439,10 +439,10 @@ def literature_reviewer_node(state: WorkflowState) -> dict[str, Any]:
             "methodology_precedents": methodology_precedents,
             "messages": [AIMessage(content=message)],
             "checkpoints": [
-                f"{datetime.utcnow().isoformat()}: Literature review complete - "
+                f"{datetime.now(timezone.utc).isoformat()}: Literature review complete - "
                 f"{len(processed_results)} papers found, {len(seminal_works)} seminal works"
             ],
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
         
     except Exception as e:

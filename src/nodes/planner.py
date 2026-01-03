@@ -9,7 +9,7 @@ This node:
 6. Uses HITL (interrupt) for human approval of research plan
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
@@ -426,7 +426,7 @@ def _process_plan_approval(
             plan.revision_count += 1
     
     if hasattr(plan, "revised_at"):
-        plan.revised_at = datetime.utcnow()
+        plan.revised_at = datetime.now(timezone.utc)
     return plan
 
 

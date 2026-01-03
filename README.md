@@ -80,12 +80,12 @@ gia-agentic-short-v2/
 │   │   ├── data_loading.py       # Load CSV, Parquet, Excel, etc.
 │   │   ├── data_profiling.py     # Column statistics, distributions
 │   │   ├── data_transformation.py # Filter, join, aggregate
-│   │   ├── data_analysis.py      # Regression, correlation
-│   │   ├── data_interpretation.py # Insights, recommendations
+│   │   ├── analysis.py           # Regression, correlation
+│   │   ├── llm_interpretation.py # Insights, recommendations
 │   │   ├── gap_analysis.py       # Literature gap detection
 │   │   ├── methodology.py        # Research design
 │   │   ├── contribution.py       # Contribution framing
-│   │   └── ...
+│   │   └── synthesis.py          # Conceptual framework tools
 │   ├── state/               # State management
 │   │   ├── schema.py        # WorkflowState TypedDict
 │   │   ├── models.py        # 50+ Pydantic models
@@ -93,10 +93,13 @@ gia-agentic-short-v2/
 │   ├── cache/               # SQLite-based LLM response caching
 │   ├── citations/           # Citation management (APA style)
 │   ├── style/               # Academic writing style enforcement
-│   │   ├── banned_words.py  # Flagged words list
+│   │   ├── banned_words.py  # 100+ flagged marketing words
 │   │   ├── academic_tone.py # Tone analysis
+│   │   ├── hedging.py       # Hedging language detection
+│   │   ├── precision.py     # Precision checking
 │   │   └── enforcer.py      # Auto-fix violations
 │   ├── writers/             # Section-specific writers
+│   │   ├── abstract.py
 │   │   ├── introduction.py
 │   │   ├── literature_review.py
 │   │   ├── methods.py
@@ -113,7 +116,7 @@ gia-agentic-short-v2/
 │   └── unit/                # 281 unit tests
 ├── public/
 │   └── research_intake_form.html
-├── docs/                    # Sprint documentation
+├── docs/                    # Architecture documentation
 └── pyproject.toml
 ```
 
@@ -161,7 +164,7 @@ The system includes 35+ tools organized into categories:
 
 ### Transformation
 - `filter_data` - Row filtering with expressions
-- `create_variable` - Computed columns (safe eval)
+- `create_variable` - Computed columns (safe eval with input validation)
 - `merge_datasets` - Join operations
 - `aggregate_data` - Group-by summaries
 
@@ -213,12 +216,16 @@ uv run pytest --cov=src tests/
 | `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |
 | `CACHE_ENABLED` | Enable LLM response caching | ❌ |
 | `CACHE_PATH` | SQLite cache location | ❌ |
+| `CACHE_TTL_DEFAULT` | Default cache TTL in seconds | ❌ |
+| `CACHE_TTL_LITERATURE` | Literature search cache TTL | ❌ |
+| `CACHE_TTL_SYNTHESIS` | Synthesis nodes cache TTL | ❌ |
+| `CACHE_TTL_WRITER` | Writer node cache TTL | ❌ |
 
 ## Model Configuration
 
 | Task Type | Model | Use Case |
 |-----------|-------|----------|
-| Complex Reasoning | `claude-opus-4-5-20251101` | Research, analysis |
+| Complex Reasoning | `claude-opus-4-5-20251101` | Research, scientific analysis |
 | General/Coding | `claude-sonnet-4-5-20250929` | Default for most tasks |
 | High-Volume | `claude-haiku-4-5-20251001` | Classification, extraction |
 
@@ -231,19 +238,21 @@ uv sync --all-extras
 # Run tests
 uv run pytest
 
-# Format code
-uv run ruff format .
+# Run specific tests
+uv run pytest tests/unit/test_intake.py -v
 
-# Lint
-uv run ruff check .
+# Run LangGraph Studio
+cd studio && uv run langgraph dev
 ```
 
 ## Security
 
 - API keys loaded from environment variables (never hardcoded)
 - ZIP extraction protected against zip bombs and path traversal
-- Safe expression evaluation (no `eval()` on user input)
+- Safe expression evaluation (regex-based pattern blocking, no `eval()` on user input)
+- Expression validation blocks code injection patterns
 - CORS restricted to localhost in development
+- Timezone-aware datetime handling (UTC)
 
 ## Author
 
@@ -251,4 +260,7 @@ uv run ruff check .
 
 Gia Tenica is an anagram for Agentic AI. Gia is a fully autonomous AI researcher.
 For more information: https://giatenica.com
-| `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

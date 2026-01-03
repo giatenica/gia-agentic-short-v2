@@ -10,7 +10,7 @@ Uses HITL interrupt if validation errors are found.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -307,7 +307,7 @@ def intake_node(state: WorkflowState) -> dict[str, Any]:
             "uploaded_data": data_files,
             "data_context": intake_data.data_description,
             "key_variables": intake_data.get_key_variables_list(),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
         
         # Handle validation results
@@ -346,7 +346,7 @@ def intake_node(state: WorkflowState) -> dict[str, Any]:
         updates["status"] = status
         updates["errors"] = errors
         updates["messages"] = [AIMessage(content=message_content)]
-        updates["checkpoints"] = [f"{datetime.utcnow().isoformat()}: Intake processing complete"]
+        updates["checkpoints"] = [f"{datetime.now(timezone.utc).isoformat()}: Intake processing complete"]
         
         return updates
         

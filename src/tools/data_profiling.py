@@ -7,7 +7,7 @@ Provides comprehensive data profiling that generates:
 """
 
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from langchain_core.tools import tool
 from langchain_anthropic import ChatAnthropic
@@ -79,7 +79,7 @@ def profile_dataset(
     
     profile = {
         "dataset_name": name,
-        "profiled_at": datetime.utcnow().isoformat(),
+        "profiled_at": datetime.now(timezone.utc).isoformat(),
         "overview": _profile_overview(df),
         "columns": _profile_columns(df),
         "missing_values": _profile_missing(df),

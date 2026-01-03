@@ -14,7 +14,7 @@ import time
 import xml.etree.ElementTree as ET
 
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.tools import tool
@@ -124,7 +124,7 @@ def semantic_scholar_search(
             if year_end:
                 year_filter += str(year_end)
             else:
-                year_filter += str(datetime.utcnow().year)
+                year_filter += str(datetime.now(timezone.utc).year)
             params["year"] = year_filter
         
         # Add fields of study filter

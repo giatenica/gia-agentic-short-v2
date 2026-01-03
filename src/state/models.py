@@ -31,6 +31,11 @@ from src.state.enums import (
 )
 
 
+def _utc_now() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
 # =============================================================================
 # Intake Form Models
 # =============================================================================
@@ -192,7 +197,7 @@ class DataFile(BaseModel):
     )
     size_bytes: int = Field(..., ge=0, description="File size in bytes")
     uploaded_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Upload timestamp"
     )
     
@@ -289,7 +294,7 @@ class DataExplorationResult(BaseModel):
         description="Unique exploration identifier"
     )
     explored_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Exploration timestamp"
     )
     
@@ -382,7 +387,7 @@ class SearchQuery(BaseModel):
     priority: int = Field(default=1, ge=1, le=5, description="Query priority (1=highest)")
     status: str = Field(default="pending", description="Query status")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Creation timestamp"
     )
 
@@ -400,7 +405,7 @@ class ResearchPlan(BaseModel):
         description="Unique plan identifier"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Creation timestamp"
     )
     revised_at: datetime | None = Field(
@@ -582,7 +587,7 @@ class SearchResult(BaseModel):
         description="Relevance to query"
     )
     retrieved_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Retrieval timestamp"
     )
 
@@ -635,7 +640,7 @@ class LiteratureSynthesis(BaseModel):
         description="Unique synthesis identifier"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Creation timestamp"
     )
     
@@ -944,7 +949,7 @@ class AnalysisResult(BaseModel):
         description="Unique analysis identifier"
     )
     analyzed_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Analysis timestamp"
     )
     
@@ -1798,7 +1803,7 @@ class ResearchDraft(BaseModel):
     )
     version: int = Field(default=1, ge=1, description="Draft version number")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Creation timestamp"
     )
     
@@ -1863,7 +1868,7 @@ class Critique(BaseModel):
     )
     draft_version: int = Field(..., ge=1, description="Version of draft reviewed")
     reviewed_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Review timestamp"
     )
     

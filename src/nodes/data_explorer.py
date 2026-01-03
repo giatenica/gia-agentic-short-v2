@@ -11,7 +11,7 @@ Uses parallel processing for efficient handling of multiple large files.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 import os
 import tempfile
@@ -332,7 +332,7 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
             "messages": [AIMessage(
                 content="No data files uploaded. Proceeding without data exploration."
             )],
-            "checkpoints": [f"{datetime.utcnow().isoformat()}: Data exploration skipped (no files)"],
+            "checkpoints": [f"{datetime.now(timezone.utc).isoformat()}: Data exploration skipped (no files)"],
         }
     
     logger.info(f"Data explorer starting: {len(uploaded_data)} files to process")
@@ -516,10 +516,10 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
         "errors": errors if errors else state.get("errors", []),
         "messages": [AIMessage(content=message)],
         "checkpoints": [
-            f"{datetime.utcnow().isoformat()}: Data exploration complete - "
+            f"{datetime.now(timezone.utc).isoformat()}: Data exploration complete - "
             f"{len(exploration_results)} datasets, Quality: {overall_quality:.0%}, Feasible: {all_feasible}"
         ],
-        "updated_at": datetime.utcnow(),
+        "updated_at": datetime.now(timezone.utc),
     }
 
 
