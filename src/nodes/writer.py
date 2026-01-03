@@ -166,6 +166,19 @@ def build_section_context(
     if conceptual_output:
         has_qualitative = True
     
+    # Sprint 16: Get tables and figures from state
+    tables = state.get("tables", [])
+    figures = state.get("figures", [])
+    
+    # Sprint 16: Get data exploration prose for methods section
+    data_exploration_prose = ""
+    data_exploration_summary = state.get("data_exploration_summary")
+    if data_exploration_summary:
+        if hasattr(data_exploration_summary, "prose_description"):
+            data_exploration_prose = data_exploration_summary.prose_description
+        elif isinstance(data_exploration_summary, dict):
+            data_exploration_prose = data_exploration_summary.get("prose_description", "")
+    
     # Get argument coherence prompt (stored for future prompt enhancement)
     _ = argument_manager.generate_coherence_prompt(section_type)
     
@@ -183,6 +196,9 @@ def build_section_context(
         has_qualitative_results=has_qualitative,
         prior_sections=completed_sections,
         target_word_count=target_count,
+        tables=tables,
+        figures=figures,
+        data_exploration_prose=data_exploration_prose,
     )
 
 
