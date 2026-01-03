@@ -5,12 +5,15 @@ Writes the data and methodology section with:
 - Variable definitions
 - Econometric specification
 - Identification strategy
+
+Sprint 16: Enhanced with data exploration prose integration.
 """
 
 from src.writers.base import BaseSectionWriter, SectionWriterConfig
 from src.state.models import SectionWritingContext
 from src.style import StyleEnforcer
 from src.citations import CitationManager
+from src.writers.artifact_helpers import format_data_exploration_for_methods
 
 
 class MethodsWriter(BaseSectionWriter):
@@ -100,6 +103,15 @@ METHODS-SPECIFIC RULES:
             f"{context.methodology_summary}",
             "",
         ]
+        
+        # Sprint 16: Add data exploration prose if available
+        if context.data_exploration_prose:
+            data_desc = format_data_exploration_for_methods(context.data_exploration_prose)
+            prompt_parts.extend([
+                "DATA DESCRIPTION (from data exploration):",
+                data_desc,
+                "",
+            ])
         
         if context.has_quantitative_results:
             prompt_parts.extend([
