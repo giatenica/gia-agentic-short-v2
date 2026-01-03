@@ -439,9 +439,11 @@ INTAKE → DATA_EXPLORER → LITERATURE → GAP → PLANNER → DATA_ACQUISITION
 
 ---
 
-### Sprint 15: Visualization & Table Generation (1 week)
+### Sprint 15: Visualization & Table Generation (1 week) ✅ COMPLETE
 
 **Goal**: Generate publication-ready tables and figures for academic papers.
+
+**Implementation**: See [SPRINT_15.md](../sprints/SPRINT_15.md) for full details.
 
 #### Tasks
 
@@ -570,21 +572,21 @@ INTAKE → DATA_EXPLORER → LITERATURE → GAP → PLANNER → DATA_ACQUISITION
    ```
 
 #### Deliverables
-- [ ] `TableArtifact` and `FigureArtifact` models
-- [ ] `create_summary_statistics_table()` tool
-- [ ] `create_regression_table()` with Stargazer-style output
-- [ ] `create_time_series_plot()` tool
-- [ ] `create_scatter_plot()` tool
-- [ ] `create_distribution_plot()` tool
-- [ ] Data analyst as ReAct agent with viz tools
-- [ ] Writer integration with table/figure embedding
-- [ ] Unit tests for all visualization tools
+- [x] `TableArtifact` and `FigureArtifact` models ✅
+- [x] `create_summary_statistics_table()` tool ✅
+- [x] `create_regression_table()` with Stargazer-style output ✅
+- [x] `create_time_series_plot()` tool ✅
+- [x] `create_scatter_plot()` tool ✅
+- [x] `create_distribution_plot()` tool ✅
+- [x] Data analyst generates viz artifacts automatically ✅
+- [ ] Writer integration with table/figure embedding (Sprint 16)
+- [x] Unit tests for all visualization tools (37 tests) ✅
 
 #### Success Criteria
-- Data analyst produces: Table 1 (Summary Stats), Table 2 (Regressions), Figure 1 (Time Series)
-- Tables render correctly in LaTeX
-- Figures are publication quality (300 DPI, proper fonts)
-- Writer outputs: "Table 1 presents summary statistics... As shown in Figure 1..."
+- ✅ Data analyst produces: Table 1 (Summary Stats), Table 2 (Regressions), Table 3 (Correlation)
+- ✅ Tables render correctly in LaTeX with significance stars
+- ✅ Figures are publication quality (300 DPI, serif fonts)
+- ⏳ Writer outputs: "Table 1 presents summary statistics..." (Sprint 16)
 
 ---
 

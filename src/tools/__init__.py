@@ -125,6 +125,17 @@ from src.tools.external_data import (
     list_available_data_sources,
     get_external_data_tools,
 )
+from src.tools.visualization import (
+    create_summary_statistics_table,
+    create_regression_table,
+    create_correlation_matrix_table,
+    create_crosstab_table,
+    create_time_series_plot,
+    create_scatter_plot,
+    create_distribution_plot,
+    create_heatmap,
+    export_all_artifacts,
+)
 
 # Tool collections
 GAP_ANALYSIS_TOOLS = [
@@ -140,6 +151,23 @@ CONTRIBUTION_TOOLS = [
 ANALYSIS_TOOLS = get_analysis_tools()
 SYNTHESIS_TOOLS = get_synthesis_tools()
 EXTERNAL_DATA_TOOLS = get_external_data_tools()
+
+# Sprint 15: Visualization tools
+VISUALIZATION_TOOLS = [
+    create_summary_statistics_table,
+    create_regression_table,
+    create_correlation_matrix_table,
+    create_crosstab_table,
+    create_time_series_plot,
+    create_scatter_plot,
+    create_distribution_plot,
+    create_heatmap,
+    export_all_artifacts,
+]
+
+def get_visualization_tools():
+    """Get all visualization tools."""
+    return VISUALIZATION_TOOLS
 
 __all__ = [
     # Search tools
@@ -264,4 +292,16 @@ __all__ = [
     "list_available_data_sources",
     "get_external_data_tools",
     "EXTERNAL_DATA_TOOLS",
+    # Visualization tools (Sprint 15)
+    "create_summary_statistics_table",
+    "create_regression_table",
+    "create_correlation_matrix_table",
+    "create_crosstab_table",
+    "create_time_series_plot",
+    "create_scatter_plot",
+    "create_distribution_plot",
+    "create_heatmap",
+    "export_all_artifacts",
+    "get_visualization_tools",
+    "VISUALIZATION_TOOLS",
 ]
