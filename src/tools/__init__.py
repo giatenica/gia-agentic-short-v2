@@ -52,12 +52,20 @@ from src.tools.contribution import (
 )
 from src.tools.analysis import (
     execute_descriptive_stats,
-    generate_correlation_matrix,
-    execute_hypothesis_test,
-    execute_regression_analysis,
+    compute_correlation_matrix,
+    run_ttest,
+    run_anova,
+    run_chi_square,
+    run_mann_whitney,
+    run_kruskal_wallis,
+    run_ols_regression,
+    run_logistic_regression,
     generate_finding,
     assess_gap_coverage,
     execute_robustness_check,
+    # Backward compatibility
+    execute_hypothesis_test,
+    execute_regression_analysis,
     get_analysis_tools,
 )
 from src.tools.synthesis import (
@@ -71,6 +79,43 @@ from src.tools.synthesis import (
     ground_in_theory,
     assess_theoretical_contribution,
     get_synthesis_tools,
+)
+from src.tools.llm_interpretation import (
+    interpret_regression,
+    interpret_hypothesis_test,
+    summarize_findings,
+    generate_methods_section,
+    get_interpretation_tools,
+    LLM_INTERPRETATION_TOOLS,
+)
+from src.tools.data_loading import (
+    load_data,
+    query_data,
+    list_datasets,
+    get_dataset_info,
+    sample_data,
+    get_data_loading_tools,
+    DATA_LOADING_TOOLS,
+)
+from src.tools.data_profiling import (
+    profile_dataset,
+    describe_dataset,
+    describe_variable,
+    get_profiling_tools,
+    DATA_PROFILING_TOOLS,
+)
+from src.tools.data_transformation import (
+    filter_data,
+    select_columns,
+    aggregate_data,
+    merge_datasets,
+    create_variable,
+    handle_missing,
+    encode_categorical,
+    pivot_data,
+    melt_data,
+    get_transformation_tools,
+    DATA_TRANSFORMATION_TOOLS,
 )
 
 # Tool collections
@@ -139,14 +184,22 @@ __all__ = [
     "generate_contribution_tool",
     "refine_question_tool",
     "CONTRIBUTION_TOOLS",
-    # Analysis tools (Sprint 5)
+    # Analysis tools (Sprint 5) - real implementations with scipy/statsmodels
     "execute_descriptive_stats",
-    "generate_correlation_matrix",
-    "execute_hypothesis_test",
-    "execute_regression_analysis",
+    "compute_correlation_matrix",
+    "run_ttest",
+    "run_anova",
+    "run_chi_square",
+    "run_mann_whitney",
+    "run_kruskal_wallis",
+    "run_ols_regression",
+    "run_logistic_regression",
     "generate_finding",
     "assess_gap_coverage",
     "execute_robustness_check",
+    # Backward compatibility wrappers
+    "execute_hypothesis_test",
+    "execute_regression_analysis",
     "get_analysis_tools",
     "ANALYSIS_TOOLS",
     # Synthesis tools (Sprint 5)
@@ -161,4 +214,37 @@ __all__ = [
     "assess_theoretical_contribution",
     "get_synthesis_tools",
     "SYNTHESIS_TOOLS",
+    # LLM interpretation tools
+    "interpret_regression",
+    "interpret_hypothesis_test",
+    "summarize_findings",
+    "generate_methods_section",
+    "get_interpretation_tools",
+    "LLM_INTERPRETATION_TOOLS",
+    # Data loading tools
+    "load_data",
+    "query_data",
+    "list_datasets",
+    "get_dataset_info",
+    "sample_data",
+    "get_data_loading_tools",
+    "DATA_LOADING_TOOLS",
+    # Data profiling tools
+    "profile_dataset",
+    "describe_dataset",
+    "describe_variable",
+    "get_profiling_tools",
+    "DATA_PROFILING_TOOLS",
+    # Data transformation tools
+    "filter_data",
+    "select_columns",
+    "aggregate_data",
+    "merge_datasets",
+    "create_variable",
+    "handle_missing",
+    "encode_categorical",
+    "pivot_data",
+    "melt_data",
+    "get_transformation_tools",
+    "DATA_TRANSFORMATION_TOOLS",
 ]

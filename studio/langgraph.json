@@ -1,10 +1,11 @@
 {
   "$schema": "https://langchain-ai.github.io/langgraph/langgraph.json",
   "graphs": {
-    "research_workflow": "./studio/graphs.py:research_workflow",
-    "react_agent": "./studio/graphs.py:react_agent",
-    "research_agent": "./studio/graphs.py:research_agent"
+    "research_workflow": "./graphs.py:research_workflow",
+    "react_agent": "./graphs.py:react_agent",
+    "research_agent": "./graphs.py:research_agent",
+    "data_analyst_agent": "./graphs.py:data_analyst_agent"
   },
-  "env": "./studio/.env",
-  "dependencies": ["."]
+  "env": "./.env",
+  "dependencies": [".."]
 }

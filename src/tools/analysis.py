@@ -2,13 +2,20 @@
 
 These tools provide statistical analysis capabilities for empirical research,
 including descriptive statistics, hypothesis testing, correlation analysis,
-and regression modeling.
+and regression modeling. All tools integrate with the DataRegistry for
+seamless data access.
 """
 
 from typing import Any
 from uuid import uuid4
 
+import numpy as np
+import pandas as pd
 from langchain_core.tools import tool
+from scipy import stats
+import statsmodels.api as sm
+from statsmodels.stats.diagnostic import het_breuschpagan, acorr_ljungbox
+from statsmodels.stats.stattools import durbin_watson
 
 from src.state.enums import (
     StatisticalTestType,
@@ -21,6 +28,7 @@ from src.state.models import (
     RegressionCoefficient,
     DataAnalysisFinding,
 )
+from src.tools.data_loading import DataRegistry
 
 
 # =============================================================================
@@ -30,107 +38,216 @@ from src.state.models import (
 
 @tool
 def execute_descriptive_stats(
-    data_summary: dict[str, Any],
+    dataset_name: str,
     variables: list[str] | None = None,
 ) -> dict[str, Any]:
     """
-    Generate descriptive statistics for variables in the data.
+    Generate descriptive statistics for variables in a registered dataset.
     
-    This tool computes summary statistics including mean, standard deviation,
-    min, max, quartiles, and other relevant measures for numeric variables.
+    Computes comprehensive summary statistics including mean, standard deviation,
+    min, max, quartiles, skewness, kurtosis, and normality test for numeric variables.
     
     Args:
-        data_summary: Dictionary containing data summary from data exploration.
+        dataset_name: Name of the dataset in the DataRegistry.
         variables: Optional list of specific variables to analyze.
                   If None, analyzes all numeric variables.
     
     Returns:
         Dictionary with descriptive statistics for each variable.
     """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return {
+            "status": "error",
+            "error": f"Dataset '{dataset_name}' not found. Available: {list(registry.datasets.keys())}",
+        }
+    
+    df = registry.get_dataframe(dataset_name)
+    
+    # Select numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    if variables:
+        numeric_cols = [c for c in variables if c in numeric_cols]
+    
+    if not numeric_cols:
+        return {
+            "status": "no_numeric_data",
+            "error": "No numeric variables found for analysis",
+        }
+    
     results = {
         "status": "complete",
-        "variables_analyzed": [],
+        "dataset": dataset_name,
+        "n_observations": len(df),
+        "variables_analyzed": numeric_cols,
         "statistics": {},
     }
     
-    # Extract columns from data summary
-    columns = data_summary.get("columns", [])
-    if not columns:
-        results["status"] = "no_data"
-        results["error"] = "No columns found in data summary"
-        return results
-    
-    for col in columns:
-        col_name = col.get("name", "")
-        col_dtype = col.get("dtype", "")
+    for col in numeric_cols:
+        data = df[col].dropna()
+        n = len(data)
         
-        # Filter by requested variables if specified
-        if variables and col_name not in variables:
+        if n == 0:
+            results["statistics"][col] = {"error": "No non-null values"}
             continue
         
-        # Only analyze numeric columns
-        if col_dtype not in ["numeric", "integer", "float"]:
-            continue
-        
-        results["variables_analyzed"].append(col_name)
-        
-        # Extract statistics from column analysis
-        results["statistics"][col_name] = {
-            "mean": col.get("mean"),
-            "std": col.get("std"),
-            "min": col.get("min_value"),
-            "max": col.get("max_value"),
-            "q25": col.get("q25"),
-            "median": col.get("median"),
-            "q75": col.get("q75"),
-            "non_null_count": col.get("non_null_count", 0),
-            "null_count": col.get("null_count", 0),
-            "null_percentage": col.get("null_percentage", 0),
+        # Basic statistics
+        col_stats = {
+            "n": n,
+            "missing": len(df) - n,
+            "missing_pct": ((len(df) - n) / len(df)) * 100,
+            "mean": float(data.mean()),
+            "std": float(data.std()),
+            "min": float(data.min()),
+            "q25": float(data.quantile(0.25)),
+            "median": float(data.median()),
+            "q75": float(data.quantile(0.75)),
+            "max": float(data.max()),
+            "range": float(data.max() - data.min()),
+            "iqr": float(data.quantile(0.75) - data.quantile(0.25)),
         }
+        
+        # Add skewness and kurtosis if enough data
+        if n >= 8:
+            col_stats["skewness"] = float(stats.skew(data))
+            col_stats["kurtosis"] = float(stats.kurtosis(data))
+            
+            # Normality test (Shapiro-Wilk for n < 5000, otherwise D'Agostino-Pearson)
+            try:
+                if n < 5000:
+                    stat, p_val = stats.shapiro(data)
+                    col_stats["normality_test"] = "Shapiro-Wilk"
+                else:
+                    stat, p_val = stats.normaltest(data)
+                    col_stats["normality_test"] = "D'Agostino-Pearson"
+                col_stats["normality_statistic"] = float(stat)
+                col_stats["normality_p_value"] = float(p_val)
+                col_stats["is_normal"] = p_val > 0.05
+            except Exception:
+                col_stats["normality_test"] = "Could not compute"
+        
+        results["statistics"][col] = col_stats
     
     return results
 
 
 @tool
-def generate_correlation_matrix(
-    data_summary: dict[str, Any],
+def compute_correlation_matrix(
+    dataset_name: str,
     variables: list[str] | None = None,
+    method: str = "pearson",
 ) -> dict[str, Any]:
     """
-    Generate a correlation matrix for numeric variables.
+    Compute a correlation matrix with significance testing for numeric variables.
     
-    This tool computes Pearson correlation coefficients between all pairs
-    of numeric variables in the dataset.
+    Calculates pairwise correlations using Pearson, Spearman, or Kendall methods,
+    with p-values for each correlation coefficient.
     
     Args:
-        data_summary: Dictionary containing data summary from data exploration.
+        dataset_name: Name of the dataset in the DataRegistry.
         variables: Optional list of specific variables to include.
+        method: Correlation method: 'pearson', 'spearman', or 'kendall'.
     
     Returns:
-        Dictionary with correlation matrix and interpretation.
+        Dictionary with correlation matrix, p-values, and notable correlations.
     """
-    # In a real implementation, this would compute actual correlations
-    # For now, we return a structured placeholder that can be filled
-    # by the LLM agent based on the data exploration results
+    registry = DataRegistry()
     
-    columns = data_summary.get("columns", [])
-    numeric_cols = [
-        c.get("name") for c in columns
-        if c.get("dtype") in ["numeric", "integer", "float"]
-    ]
+    if dataset_name not in registry.datasets:
+        return {
+            "status": "error",
+            "error": f"Dataset '{dataset_name}' not found.",
+        }
+    
+    df = registry.get_dataframe(dataset_name)
+    
+    # Select numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     
     if variables:
-        numeric_cols = [c for c in numeric_cols if c in variables]
+        numeric_cols = [c for c in variables if c in numeric_cols]
+    
+    if len(numeric_cols) < 2:
+        return {
+            "status": "error",
+            "error": "Need at least 2 numeric variables for correlation analysis",
+        }
+    
+    df_numeric = df[numeric_cols].dropna()
+    n = len(df_numeric)
+    
+    if n < 3:
+        return {
+            "status": "error",
+            "error": f"Insufficient observations ({n}) after removing missing values",
+        }
+    
+    # Compute correlation matrix
+    corr_matrix = df_numeric.corr(method=method)
+    
+    # Compute p-values
+    p_matrix = pd.DataFrame(
+        np.ones((len(numeric_cols), len(numeric_cols))),
+        index=numeric_cols,
+        columns=numeric_cols,
+    )
+    
+    for i, col1 in enumerate(numeric_cols):
+        for j, col2 in enumerate(numeric_cols):
+            if i < j:
+                if method == "pearson":
+                    _, p = stats.pearsonr(df_numeric[col1], df_numeric[col2])
+                elif method == "spearman":
+                    _, p = stats.spearmanr(df_numeric[col1], df_numeric[col2])
+                else:  # kendall
+                    _, p = stats.kendalltau(df_numeric[col1], df_numeric[col2])
+                p_matrix.loc[col1, col2] = p
+                p_matrix.loc[col2, col1] = p
+    
+    # Find notable correlations
+    strong_positive = []
+    strong_negative = []
+    moderate_correlations = []
+    
+    for i, col1 in enumerate(numeric_cols):
+        for j, col2 in enumerate(numeric_cols):
+            if i < j:
+                r = corr_matrix.loc[col1, col2]
+                p = p_matrix.loc[col1, col2]
+                
+                corr_info = {
+                    "var1": col1,
+                    "var2": col2,
+                    "correlation": round(r, 4),
+                    "p_value": round(p, 4),
+                    "significant": p < 0.05,
+                }
+                
+                if abs(r) >= 0.7:
+                    if r > 0:
+                        strong_positive.append(corr_info)
+                    else:
+                        strong_negative.append(corr_info)
+                elif abs(r) >= 0.3:
+                    moderate_correlations.append(corr_info)
     
     return {
         "status": "complete",
+        "dataset": dataset_name,
+        "method": method,
+        "n_observations": n,
         "variables": numeric_cols,
-        "correlation_matrix": {},  # Would be filled with actual correlations
-        "strong_correlations": [],  # Pairs with |r| > 0.7
-        "moderate_correlations": [],  # Pairs with 0.3 < |r| < 0.7
+        "correlation_matrix": corr_matrix.round(4).to_dict(),
+        "p_value_matrix": p_matrix.round(4).to_dict(),
+        "strong_positive_correlations": strong_positive,
+        "strong_negative_correlations": strong_negative,
+        "moderate_correlations": moderate_correlations,
         "interpretation": (
-            f"Correlation analysis computed for {len(numeric_cols)} numeric variables. "
-            "Review the correlation matrix for significant relationships."
+            f"Computed {method.capitalize()} correlations for {len(numeric_cols)} variables. "
+            f"Found {len(strong_positive)} strong positive and {len(strong_negative)} "
+            f"strong negative correlations (|r| >= 0.7)."
         ),
     }
 
@@ -141,84 +258,416 @@ def generate_correlation_matrix(
 
 
 @tool
-def execute_hypothesis_test(
-    test_type: str,
-    hypothesis: str,
-    variables: list[str],
-    test_parameters: dict[str, Any] | None = None,
+def run_ttest(
+    dataset_name: str,
+    variable: str,
+    group_variable: str | None = None,
+    test_type: str = "independent",
+    paired_variable: str | None = None,
+    hypothesized_mean: float | None = None,
+    alpha: float = 0.05,
 ) -> StatisticalResult:
     """
-    Execute a statistical hypothesis test.
+    Perform a t-test for comparing means.
     
-    This tool performs various statistical tests including t-tests, ANOVA,
-    chi-square tests, and correlation tests.
+    Supports one-sample, independent two-sample, and paired t-tests with
+    effect size (Cohen's d) and confidence intervals.
     
     Args:
-        test_type: Type of test (t_test, paired_t_test, anova, chi_square, etc.)
-        hypothesis: The hypothesis being tested.
-        variables: Variables involved in the test.
-        test_parameters: Additional test parameters (e.g., alpha level).
+        dataset_name: Name of the dataset in the DataRegistry.
+        variable: The variable to test.
+        group_variable: Grouping variable for independent t-test (must have 2 groups).
+        test_type: Type of t-test: 'one_sample', 'independent', or 'paired'.
+        paired_variable: Second variable for paired t-test.
+        hypothesized_mean: Population mean for one-sample test (default 0).
+        alpha: Significance level (default 0.05).
     
     Returns:
-        StatisticalResult with test statistics and interpretation.
+        StatisticalResult with test statistics, p-value, effect size, and interpretation.
     """
-    params = test_parameters or {}
-    alpha = params.get("alpha", 0.05)
+    registry = DataRegistry()
     
-    # Map string to enum
+    if dataset_name not in registry.datasets:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.T_TEST,
+            test_name="T-Test (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Dataset '{dataset_name}' not found.",
+        )
+    
+    df = registry.get_dataframe(dataset_name)
+    
     try:
-        test_type_enum = StatisticalTestType(test_type)
-    except ValueError:
-        test_type_enum = StatisticalTestType.OTHER
-    
-    # This would perform actual statistical computation in production
-    # For now, create a structured result that can be filled by analysis
-    
-    # Placeholder values - in production these would come from actual tests
-    statistic = 2.5  # Placeholder
-    p_value = 0.01  # Placeholder
-    df = 50  # Placeholder
-    
-    is_significant = p_value < alpha
-    
-    if is_significant:
-        interpretation = (
-            f"The test result (statistic={statistic:.3f}, p={p_value:.4f}) is "
-            f"statistically significant at alpha={alpha}. We reject the null hypothesis."
+        if test_type == "one_sample":
+            # One-sample t-test
+            data = df[variable].dropna()
+            mu = hypothesized_mean or 0
+            t_stat, p_value = stats.ttest_1samp(data, mu)
+            
+            # Cohen's d for one-sample
+            cohens_d = (data.mean() - mu) / data.std()
+            
+            test_name = "One-Sample T-Test"
+            df_val = len(data) - 1
+            
+            interpretation = (
+                f"One-sample t-test comparing {variable} (M={data.mean():.3f}, "
+                f"SD={data.std():.3f}) to hypothesized mean of {mu}. "
+            )
+            
+        elif test_type == "paired":
+            # Paired t-test
+            if not paired_variable:
+                raise ValueError("paired_variable required for paired t-test")
+            
+            data1 = df[variable].dropna()
+            data2 = df[paired_variable].dropna()
+            
+            # Align data
+            combined = df[[variable, paired_variable]].dropna()
+            data1 = combined[variable]
+            data2 = combined[paired_variable]
+            
+            t_stat, p_value = stats.ttest_rel(data1, data2)
+            
+            # Cohen's d for paired
+            diff = data1 - data2
+            cohens_d = diff.mean() / diff.std()
+            
+            test_name = "Paired Samples T-Test"
+            df_val = len(data1) - 1
+            
+            interpretation = (
+                f"Paired t-test comparing {variable} (M={data1.mean():.3f}) "
+                f"and {paired_variable} (M={data2.mean():.3f}). "
+                f"Mean difference: {diff.mean():.3f}. "
+            )
+            
+        else:  # independent
+            # Independent two-sample t-test
+            if not group_variable:
+                raise ValueError("group_variable required for independent t-test")
+            
+            groups = df[group_variable].dropna().unique()
+            if len(groups) != 2:
+                raise ValueError(f"Expected 2 groups, found {len(groups)}")
+            
+            group1_data = df[df[group_variable] == groups[0]][variable].dropna()
+            group2_data = df[df[group_variable] == groups[1]][variable].dropna()
+            
+            # Levene's test for equal variances
+            _, levene_p = stats.levene(group1_data, group2_data)
+            equal_var = levene_p > 0.05
+            
+            t_stat, p_value = stats.ttest_ind(group1_data, group2_data, equal_var=equal_var)
+            
+            # Cohen's d for independent samples
+            pooled_std = np.sqrt(
+                ((len(group1_data) - 1) * group1_data.std()**2 +
+                 (len(group2_data) - 1) * group2_data.std()**2) /
+                (len(group1_data) + len(group2_data) - 2)
+            )
+            cohens_d = (group1_data.mean() - group2_data.mean()) / pooled_std
+            
+            test_name = "Independent Samples T-Test" + (" (Welch's)" if not equal_var else "")
+            df_val = len(group1_data) + len(group2_data) - 2
+            
+            interpretation = (
+                f"Independent t-test comparing {variable} between {groups[0]} "
+                f"(M={group1_data.mean():.3f}, n={len(group1_data)}) and {groups[1]} "
+                f"(M={group2_data.mean():.3f}, n={len(group2_data)}). "
+            )
+        
+        # Effect size interpretation
+        effect_label = "negligible"
+        if abs(cohens_d) >= 0.8:
+            effect_label = "large"
+        elif abs(cohens_d) >= 0.5:
+            effect_label = "medium"
+        elif abs(cohens_d) >= 0.2:
+            effect_label = "small"
+        
+        is_significant = p_value < alpha
+        
+        if is_significant:
+            interpretation += (
+                f"Result is statistically significant (t={t_stat:.3f}, p={p_value:.4f}, "
+                f"Cohen's d={cohens_d:.3f}, {effect_label} effect). "
+                f"We reject the null hypothesis at alpha={alpha}."
+            )
+        else:
+            interpretation += (
+                f"Result is not statistically significant (t={t_stat:.3f}, p={p_value:.4f}, "
+                f"Cohen's d={cohens_d:.3f}). We fail to reject the null hypothesis."
+            )
+        
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.T_TEST if test_type != "paired" else StatisticalTestType.PAIRED_T_TEST,
+            test_name=test_name,
+            statistic=float(t_stat),
+            p_value=float(p_value),
+            degrees_of_freedom=int(df_val),
+            confidence_level=1 - alpha,
+            is_significant=is_significant,
+            effect_size=float(cohens_d),
+            effect_size_type="Cohen's d",
+            interpretation=interpretation,
         )
-    else:
-        interpretation = (
-            f"The test result (statistic={statistic:.3f}, p={p_value:.4f}) is not "
-            f"statistically significant at alpha={alpha}. We fail to reject the null hypothesis."
+        
+    except Exception as e:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.T_TEST,
+            test_name="T-Test (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Error performing t-test: {str(e)}",
         )
-    
-    return StatisticalResult(
-        result_id=str(uuid4())[:8],
-        test_type=test_type_enum,
-        test_name=_get_test_name(test_type_enum),
-        statistic=statistic,
-        p_value=p_value,
-        degrees_of_freedom=df,
-        confidence_level=1 - alpha,
-        is_significant=is_significant,
-        interpretation=interpretation,
-    )
 
 
-def _get_test_name(test_type: StatisticalTestType) -> str:
-    """Get human-readable test name from enum."""
-    names = {
-        StatisticalTestType.T_TEST: "Independent Samples T-Test",
-        StatisticalTestType.PAIRED_T_TEST: "Paired Samples T-Test",
-        StatisticalTestType.ANOVA: "One-Way ANOVA",
-        StatisticalTestType.F_TEST: "F-Test",
-        StatisticalTestType.CHI_SQUARE: "Chi-Square Test",
-        StatisticalTestType.WILCOXON: "Wilcoxon Signed-Rank Test",
-        StatisticalTestType.MANN_WHITNEY: "Mann-Whitney U Test",
-        StatisticalTestType.PEARSON: "Pearson Correlation",
-        StatisticalTestType.SPEARMAN: "Spearman Rank Correlation",
-    }
-    return names.get(test_type, "Statistical Test")
+@tool
+def run_anova(
+    dataset_name: str,
+    dependent_variable: str,
+    group_variable: str,
+    alpha: float = 0.05,
+) -> StatisticalResult:
+    """
+    Perform one-way ANOVA to compare means across multiple groups.
+    
+    Tests whether there are statistically significant differences between
+    group means, with eta-squared effect size and post-hoc comparisons if significant.
+    
+    Args:
+        dataset_name: Name of the dataset in the DataRegistry.
+        dependent_variable: The continuous dependent variable.
+        group_variable: The categorical grouping variable.
+        alpha: Significance level (default 0.05).
+    
+    Returns:
+        StatisticalResult with F-statistic, p-value, effect size, and group statistics.
+    """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.ANOVA,
+            test_name="One-Way ANOVA (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Dataset '{dataset_name}' not found.",
+        )
+    
+    df = registry.get_dataframe(dataset_name)
+    
+    try:
+        # Get groups
+        groups = df[group_variable].dropna().unique()
+        if len(groups) < 2:
+            raise ValueError(f"Need at least 2 groups, found {len(groups)}")
+        
+        # Create list of arrays for each group
+        group_data = [
+            df[df[group_variable] == g][dependent_variable].dropna().values
+            for g in groups
+        ]
+        
+        # Remove empty groups
+        non_empty = [(g, d) for g, d in zip(groups, group_data) if len(d) > 0]
+        groups = [g for g, _ in non_empty]
+        group_data = [d for _, d in non_empty]
+        
+        # One-way ANOVA
+        f_stat, p_value = stats.f_oneway(*group_data)
+        
+        # Effect size (eta-squared)
+        all_data = np.concatenate(group_data)
+        grand_mean = all_data.mean()
+        
+        ss_between = sum(len(d) * (d.mean() - grand_mean)**2 for d in group_data)
+        ss_total = sum((x - grand_mean)**2 for x in all_data)
+        eta_squared = ss_between / ss_total if ss_total > 0 else 0
+        
+        # Group statistics
+        group_stats = {
+            str(g): {
+                "n": len(d),
+                "mean": float(d.mean()),
+                "std": float(d.std()),
+            }
+            for g, d in zip(groups, group_data)
+        }
+        
+        is_significant = p_value < alpha
+        
+        # Effect size interpretation
+        effect_label = "negligible"
+        if eta_squared >= 0.14:
+            effect_label = "large"
+        elif eta_squared >= 0.06:
+            effect_label = "medium"
+        elif eta_squared >= 0.01:
+            effect_label = "small"
+        
+        interpretation = (
+            f"One-way ANOVA comparing {dependent_variable} across {len(groups)} groups "
+            f"of {group_variable}. "
+        )
+        
+        # Add group statistics to interpretation
+        group_stats_str = "; ".join(
+            f"{g}: M={s['mean']:.3f}, SD={s['std']:.3f}, n={s['n']}"
+            for g, s in group_stats.items()
+        )
+        
+        if is_significant:
+            interpretation += (
+                f"Result is statistically significant (F={f_stat:.3f}, p={p_value:.4f}, "
+                f"eta-squared={eta_squared:.3f}, {effect_label} effect). "
+                f"At least one group mean differs significantly from the others. "
+                f"Group statistics: {group_stats_str}."
+            )
+        else:
+            interpretation += (
+                f"Result is not statistically significant (F={f_stat:.3f}, p={p_value:.4f}). "
+                f"No evidence of differences between group means. "
+                f"Group statistics: {group_stats_str}."
+            )
+        
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.ANOVA,
+            test_name="One-Way ANOVA",
+            statistic=float(f_stat),
+            p_value=float(p_value),
+            degrees_of_freedom=int(len(groups) - 1),
+            confidence_level=1 - alpha,
+            is_significant=is_significant,
+            effect_size=float(eta_squared),
+            effect_size_type="eta-squared",
+            interpretation=interpretation,
+        )
+        
+    except Exception as e:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.ANOVA,
+            test_name="One-Way ANOVA (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Error performing ANOVA: {str(e)}",
+        )
+
+
+@tool
+def run_chi_square(
+    dataset_name: str,
+    variable1: str,
+    variable2: str,
+    alpha: float = 0.05,
+) -> StatisticalResult:
+    """
+    Perform chi-square test of independence for categorical variables.
+    
+    Tests whether there is a statistically significant association between
+    two categorical variables, with Cramer's V effect size.
+    
+    Args:
+        dataset_name: Name of the dataset in the DataRegistry.
+        variable1: First categorical variable.
+        variable2: Second categorical variable.
+        alpha: Significance level (default 0.05).
+    
+    Returns:
+        StatisticalResult with chi-square statistic, p-value, and effect size.
+    """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.CHI_SQUARE,
+            test_name="Chi-Square Test (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Dataset '{dataset_name}' not found.",
+        )
+    
+    df = registry.get_dataframe(dataset_name)
+    
+    try:
+        # Create contingency table
+        contingency = pd.crosstab(df[variable1], df[variable2])
+        
+        # Chi-square test
+        chi2, p_value, dof, expected = stats.chi2_contingency(contingency)
+        
+        # Cramer's V effect size
+        n = contingency.sum().sum()
+        min_dim = min(contingency.shape[0] - 1, contingency.shape[1] - 1)
+        cramers_v = np.sqrt(chi2 / (n * min_dim)) if min_dim > 0 else 0
+        
+        is_significant = p_value < alpha
+        
+        # Effect size interpretation
+        effect_label = "negligible"
+        if cramers_v >= 0.5:
+            effect_label = "large"
+        elif cramers_v >= 0.3:
+            effect_label = "medium"
+        elif cramers_v >= 0.1:
+            effect_label = "small"
+        
+        interpretation = (
+            f"Chi-square test of independence between {variable1} and {variable2}. "
+            f"Contingency table: {contingency.shape[0]} x {contingency.shape[1]}, N={n}. "
+        )
+        
+        if is_significant:
+            interpretation += (
+                f"Result is statistically significant (chi2={chi2:.3f}, df={dof}, "
+                f"p={p_value:.4f}, Cramer's V={cramers_v:.3f}, {effect_label} effect). "
+                f"There is a significant association between the variables."
+            )
+        else:
+            interpretation += (
+                f"Result is not statistically significant (chi2={chi2:.3f}, df={dof}, "
+                f"p={p_value:.4f}). No evidence of association between variables."
+            )
+        
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.CHI_SQUARE,
+            test_name="Chi-Square Test of Independence",
+            statistic=float(chi2),
+            p_value=float(p_value),
+            degrees_of_freedom=int(dof),
+            confidence_level=1 - alpha,
+            is_significant=is_significant,
+            effect_size=float(cramers_v),
+            effect_size_type="Cramer's V",
+            interpretation=interpretation,
+        )
+        
+    except Exception as e:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.CHI_SQUARE,
+            test_name="Chi-Square Test (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Error performing chi-square test: {str(e)}",
+        )
 
 
 # =============================================================================
@@ -227,106 +676,470 @@ def _get_test_name(test_type: StatisticalTestType) -> str:
 
 
 @tool
-def execute_regression_analysis(
-    model_type: str,
+def run_ols_regression(
+    dataset_name: str,
     dependent_variable: str,
     independent_variables: list[str],
     control_variables: list[str] | None = None,
-    data_info: dict[str, Any] | None = None,
+    robust_se: bool = False,
+    alpha: float = 0.05,
 ) -> RegressionResult:
     """
-    Execute a regression analysis.
+    Perform OLS regression analysis with comprehensive diagnostics.
     
-    This tool performs regression modeling including OLS, fixed effects,
-    and other econometric methods.
+    Fits an ordinary least squares regression model with options for
+    heteroskedasticity-robust standard errors and full diagnostic tests.
     
     Args:
-        model_type: Type of regression (ols, fixed_effects, random_effects, etc.)
+        dataset_name: Name of the dataset in the DataRegistry.
         dependent_variable: The dependent variable name.
         independent_variables: List of independent variable names.
         control_variables: Optional list of control variable names.
-        data_info: Data information from exploration results.
+        robust_se: Whether to use heteroskedasticity-robust standard errors.
+        alpha: Significance level (default 0.05).
     
     Returns:
         RegressionResult with coefficients, fit statistics, and diagnostics.
     """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return RegressionResult(
+            result_id=str(uuid4())[:8],
+            model_type="ols_error",
+            dependent_variable=dependent_variable,
+            r_squared=0.0,
+            n_observations=0,
+            interpretation=f"Dataset '{dataset_name}' not found.",
+        )
+    
+    df = registry.get_dataframe(dataset_name)
     controls = control_variables or []
+    all_vars = independent_variables + controls
     
-    # Create placeholder coefficients
-    # In production, these would come from actual regression
-    coefficients = []
-    
-    # Add intercept
-    coefficients.append(
-        RegressionCoefficient(
-            variable="(Intercept)",
-            coefficient=1.5,
-            std_error=0.3,
-            t_statistic=5.0,
-            p_value=0.001,
-            confidence_interval_lower=0.9,
-            confidence_interval_upper=2.1,
-            is_significant=True,
-        )
-    )
-    
-    # Add coefficients for each variable
-    for i, var in enumerate(independent_variables):
-        is_sig = i % 2 == 0  # Placeholder pattern
-        coefficients.append(
-            RegressionCoefficient(
-                variable=var,
-                coefficient=0.5 if is_sig else 0.1,
-                std_error=0.1 if is_sig else 0.15,
-                t_statistic=5.0 if is_sig else 0.67,
-                p_value=0.001 if is_sig else 0.5,
-                confidence_interval_lower=0.3 if is_sig else -0.2,
-                confidence_interval_upper=0.7 if is_sig else 0.4,
-                is_significant=is_sig,
+    try:
+        # Prepare data
+        vars_needed = [dependent_variable] + all_vars
+        df_model = df[vars_needed].dropna()
+        
+        if len(df_model) < len(all_vars) + 2:
+            raise ValueError(
+                f"Insufficient observations ({len(df_model)}) for "
+                f"{len(all_vars)} variables"
             )
-        )
-    
-    # Add control variables
-    for var in controls:
-        coefficients.append(
-            RegressionCoefficient(
-                variable=var,
-                coefficient=0.2,
-                std_error=0.1,
-                t_statistic=2.0,
-                p_value=0.05,
-                confidence_interval_lower=0.0,
-                confidence_interval_upper=0.4,
-                is_significant=True,
+        
+        y = df_model[dependent_variable]
+        X = df_model[all_vars]
+        X = sm.add_constant(X)
+        
+        # Fit model
+        model = sm.OLS(y, X)
+        if robust_se:
+            results = model.fit(cov_type='HC3')
+        else:
+            results = model.fit()
+        
+        # Extract coefficients
+        coefficients = []
+        for var in results.params.index:
+            idx = list(results.params.index).index(var)
+            coef = results.params[var]
+            se = results.bse[var]
+            t_val = results.tvalues[var]
+            p_val = results.pvalues[var]
+            ci = results.conf_int(alpha=alpha).loc[var]
+            
+            display_var = "(Intercept)" if var == "const" else var
+            
+            coefficients.append(
+                RegressionCoefficient(
+                    variable=display_var,
+                    coefficient=float(coef),
+                    std_error=float(se),
+                    t_statistic=float(t_val),
+                    p_value=float(p_val),
+                    confidence_interval_lower=float(ci[0]),
+                    confidence_interval_upper=float(ci[1]),
+                    is_significant=p_val < alpha,
+                )
             )
+        
+        # Compute diagnostics
+        # Durbin-Watson test for autocorrelation
+        dw = durbin_watson(results.resid)
+        
+        # Breusch-Pagan test for heteroskedasticity
+        het_test_result = None
+        try:
+            bp_stat, bp_pval, _, _ = het_breuschpagan(results.resid, X)
+            het_concern = bp_pval < 0.05
+            het_test_result = f"Breusch-Pagan: stat={bp_stat:.3f}, p={bp_pval:.4f}"
+            if het_concern:
+                het_test_result += " (heteroskedasticity detected)"
+        except Exception:
+            het_test_result = "Could not compute"
+        
+        # Build interpretation
+        sig_vars = [c.variable for c in coefficients 
+                    if c.is_significant and c.variable != "(Intercept)"]
+        
+        interpretation = (
+            f"OLS regression with {dependent_variable} as dependent variable "
+            f"(n={len(df_model)}). "
+        )
+        
+        if sig_vars:
+            interpretation += f"Significant predictors: {', '.join(sig_vars)}. "
+        else:
+            interpretation += "No significant predictors found. "
+        
+        interpretation += (
+            f"Model explains {results.rsquared * 100:.1f}% of variance "
+            f"(Adj. R-squared={results.rsquared_adj:.3f}). "
+            f"F-statistic={results.fvalue:.2f} (p={results.f_pvalue:.4f})."
+        )
+        
+        if robust_se:
+            interpretation += " Heteroskedasticity-robust standard errors used."
+        
+        return RegressionResult(
+            result_id=str(uuid4())[:8],
+            model_type="ols" + ("_robust" if robust_se else ""),
+            dependent_variable=dependent_variable,
+            r_squared=float(results.rsquared),
+            adjusted_r_squared=float(results.rsquared_adj),
+            f_statistic=float(results.fvalue),
+            f_p_value=float(results.f_pvalue),
+            coefficients=coefficients,
+            n_observations=len(df_model),
+            residual_std_error=float(np.sqrt(results.mse_resid)),
+            durbin_watson=float(dw),
+            heteroskedasticity_test=het_test_result,
+            interpretation=interpretation,
+        )
+        
+    except Exception as e:
+        return RegressionResult(
+            result_id=str(uuid4())[:8],
+            model_type="ols_error",
+            dependent_variable=dependent_variable,
+            r_squared=0.0,
+            adjusted_r_squared=0.0,
+            n_observations=0,
+            interpretation=f"Error performing regression: {str(e)}",
+        )
+
+
+@tool
+def run_logistic_regression(
+    dataset_name: str,
+    dependent_variable: str,
+    independent_variables: list[str],
+    control_variables: list[str] | None = None,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """
+    Perform logistic regression for binary outcomes.
+    
+    Fits a logistic regression model with odds ratios and model fit statistics.
+    
+    Args:
+        dataset_name: Name of the dataset in the DataRegistry.
+        dependent_variable: Binary dependent variable (0/1).
+        independent_variables: List of independent variable names.
+        control_variables: Optional list of control variable names.
+        alpha: Significance level (default 0.05).
+    
+    Returns:
+        Dictionary with coefficients, odds ratios, and model fit statistics.
+    """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return {"status": "error", "error": f"Dataset '{dataset_name}' not found."}
+    
+    df = registry.get_dataframe(dataset_name)
+    controls = control_variables or []
+    all_vars = independent_variables + controls
+    
+    try:
+        # Prepare data
+        vars_needed = [dependent_variable] + all_vars
+        df_model = df[vars_needed].dropna()
+        
+        y = df_model[dependent_variable]
+        
+        # Verify binary outcome
+        unique_vals = y.unique()
+        if len(unique_vals) != 2:
+            raise ValueError(
+                f"Dependent variable must be binary, found {len(unique_vals)} unique values"
+            )
+        
+        X = df_model[all_vars]
+        X = sm.add_constant(X)
+        
+        # Fit logistic regression
+        model = sm.Logit(y, X)
+        results = model.fit(disp=0)
+        
+        # Extract coefficients with odds ratios
+        coefficients = []
+        for var in results.params.index:
+            coef = results.params[var]
+            se = results.bse[var]
+            z_val = results.tvalues[var]
+            p_val = results.pvalues[var]
+            ci = results.conf_int(alpha=alpha).loc[var]
+            
+            display_var = "(Intercept)" if var == "const" else var
+            odds_ratio = np.exp(coef)
+            
+            coefficients.append({
+                "variable": display_var,
+                "coefficient": float(coef),
+                "std_error": float(se),
+                "z_statistic": float(z_val),
+                "p_value": float(p_val),
+                "ci_lower": float(ci[0]),
+                "ci_upper": float(ci[1]),
+                "odds_ratio": float(odds_ratio),
+                "odds_ratio_ci_lower": float(np.exp(ci[0])),
+                "odds_ratio_ci_upper": float(np.exp(ci[1])),
+                "is_significant": p_val < alpha,
+            })
+        
+        # Model fit statistics
+        fit_stats = {
+            "pseudo_r_squared": float(results.prsquared),
+            "log_likelihood": float(results.llf),
+            "aic": float(results.aic),
+            "bic": float(results.bic),
+        }
+        
+        sig_vars = [c["variable"] for c in coefficients 
+                    if c["is_significant"] and c["variable"] != "(Intercept)"]
+        
+        interpretation = (
+            f"Logistic regression with {dependent_variable} as binary outcome "
+            f"(n={len(df_model)}). "
+        )
+        
+        if sig_vars:
+            interpretation += f"Significant predictors: {', '.join(sig_vars)}. "
+        
+        interpretation += f"Pseudo R-squared={fit_stats['pseudo_r_squared']:.3f}."
+        
+        return {
+            "status": "complete",
+            "model_type": "logistic",
+            "dependent_variable": dependent_variable,
+            "n_observations": len(df_model),
+            "coefficients": coefficients,
+            "fit_statistics": fit_stats,
+            "interpretation": interpretation,
+        }
+        
+    except Exception as e:
+        return {"status": "error", "error": f"Error performing logistic regression: {str(e)}"}
+
+
+# =============================================================================
+# Non-parametric Tests
+# =============================================================================
+
+
+@tool
+def run_mann_whitney(
+    dataset_name: str,
+    variable: str,
+    group_variable: str,
+    alpha: float = 0.05,
+) -> StatisticalResult:
+    """
+    Perform Mann-Whitney U test (non-parametric alternative to independent t-test).
+    
+    Tests whether the distributions of two groups differ significantly when
+    normality assumptions are violated.
+    
+    Args:
+        dataset_name: Name of the dataset in the DataRegistry.
+        variable: The variable to compare.
+        group_variable: Grouping variable (must have exactly 2 groups).
+        alpha: Significance level (default 0.05).
+    
+    Returns:
+        StatisticalResult with U-statistic, p-value, and effect size (r).
+    """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.MANN_WHITNEY,
+            test_name="Mann-Whitney U (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Dataset '{dataset_name}' not found.",
         )
     
-    # Get sample size from data info
-    n_obs = 1000  # Default
-    if data_info:
-        n_obs = data_info.get("total_rows", 1000)
+    df = registry.get_dataframe(dataset_name)
     
-    # Build interpretation
-    sig_vars = [c.variable for c in coefficients if c.is_significant and c.variable != "(Intercept)"]
+    try:
+        groups = df[group_variable].dropna().unique()
+        if len(groups) != 2:
+            raise ValueError(f"Expected 2 groups, found {len(groups)}")
+        
+        group1 = df[df[group_variable] == groups[0]][variable].dropna()
+        group2 = df[df[group_variable] == groups[1]][variable].dropna()
+        
+        u_stat, p_value = stats.mannwhitneyu(group1, group2, alternative='two-sided')
+        
+        # Effect size r = Z / sqrt(N)
+        n1, n2 = len(group1), len(group2)
+        z = stats.norm.ppf(1 - p_value/2) if p_value < 1 else 0
+        effect_r = z / np.sqrt(n1 + n2)
+        
+        is_significant = p_value < alpha
+        
+        interpretation = (
+            f"Mann-Whitney U test comparing {variable} between {groups[0]} "
+            f"(Mdn={group1.median():.3f}, n={n1}) and {groups[1]} "
+            f"(Mdn={group2.median():.3f}, n={n2}). "
+        )
+        
+        if is_significant:
+            interpretation += (
+                f"Result is statistically significant (U={u_stat:.1f}, p={p_value:.4f}, "
+                f"r={effect_r:.3f}). The distributions differ significantly."
+            )
+        else:
+            interpretation += (
+                f"Result is not statistically significant (U={u_stat:.1f}, p={p_value:.4f}). "
+                f"No evidence of difference between distributions."
+            )
+        
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.MANN_WHITNEY,
+            test_name="Mann-Whitney U Test",
+            statistic=float(u_stat),
+            p_value=float(p_value),
+            confidence_level=1 - alpha,
+            is_significant=is_significant,
+            effect_size=float(effect_r),
+            interpretation=interpretation,
+        )
+        
+    except Exception as e:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.MANN_WHITNEY,
+            test_name="Mann-Whitney U (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Error: {str(e)}",
+        )
+
+
+@tool
+def run_kruskal_wallis(
+    dataset_name: str,
+    variable: str,
+    group_variable: str,
+    alpha: float = 0.05,
+) -> StatisticalResult:
+    """
+    Perform Kruskal-Wallis H test (non-parametric alternative to one-way ANOVA).
     
-    interpretation = f"{model_type.upper()} regression with {dependent_variable} as dependent variable. "
-    if sig_vars:
-        interpretation += f"Significant predictors: {', '.join(sig_vars)}. "
-    interpretation += f"Model explains approximately {0.35 * 100:.1f}% of variance in {dependent_variable}."
+    Tests whether multiple group distributions differ when normality assumptions
+    are violated.
     
-    return RegressionResult(
-        result_id=str(uuid4())[:8],
-        model_type=model_type,
-        dependent_variable=dependent_variable,
-        r_squared=0.35,  # Placeholder
-        adjusted_r_squared=0.33,  # Placeholder
-        f_statistic=25.5,
-        f_p_value=0.001,
-        coefficients=coefficients,
-        n_observations=n_obs,
-        residual_std_error=0.8,
-        interpretation=interpretation,
-    )
+    Args:
+        dataset_name: Name of the dataset in the DataRegistry.
+        variable: The variable to compare.
+        group_variable: Grouping variable (2 or more groups).
+        alpha: Significance level (default 0.05).
+    
+    Returns:
+        StatisticalResult with H-statistic, p-value, and effect size (epsilon-squared).
+    """
+    registry = DataRegistry()
+    
+    if dataset_name not in registry.datasets:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.OTHER,
+            test_name="Kruskal-Wallis (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Dataset '{dataset_name}' not found.",
+        )
+    
+    df = registry.get_dataframe(dataset_name)
+    
+    try:
+        groups = df[group_variable].dropna().unique()
+        if len(groups) < 2:
+            raise ValueError(f"Need at least 2 groups, found {len(groups)}")
+        
+        group_data = [
+            df[df[group_variable] == g][variable].dropna().values
+            for g in groups
+        ]
+        group_data = [d for d in group_data if len(d) > 0]
+        
+        h_stat, p_value = stats.kruskal(*group_data)
+        
+        # Effect size: epsilon-squared
+        n_total = sum(len(d) for d in group_data)
+        epsilon_sq = (h_stat - len(groups) + 1) / (n_total - len(groups))
+        epsilon_sq = max(0, epsilon_sq)  # Ensure non-negative
+        
+        is_significant = p_value < alpha
+        
+        interpretation = (
+            f"Kruskal-Wallis test comparing {variable} across {len(groups)} groups. "
+        )
+        
+        if is_significant:
+            interpretation += (
+                f"Result is significant (H={h_stat:.3f}, p={p_value:.4f}, "
+                f"epsilon-squared={epsilon_sq:.3f}). At least one group differs."
+            )
+        else:
+            interpretation += (
+                f"Result is not significant (H={h_stat:.3f}, p={p_value:.4f}). "
+                f"No evidence of differences between groups."
+            )
+        
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.OTHER,
+            test_name="Kruskal-Wallis H Test",
+            statistic=float(h_stat),
+            p_value=float(p_value),
+            degrees_of_freedom=int(len(groups) - 1),
+            confidence_level=1 - alpha,
+            is_significant=is_significant,
+            effect_size=float(epsilon_sq),
+            effect_size_type="epsilon-squared",
+            interpretation=interpretation,
+        )
+        
+    except Exception as e:
+        return StatisticalResult(
+            result_id=str(uuid4())[:8],
+            test_type=StatisticalTestType.OTHER,
+            test_name="Kruskal-Wallis (Error)",
+            statistic=0.0,
+            p_value=1.0,
+            is_significant=False,
+            interpretation=f"Error: {str(e)}",
+        )
 
 
 # =============================================================================
@@ -456,38 +1269,243 @@ def assess_gap_coverage(
 
 @tool
 def execute_robustness_check(
+    dataset_name: str,
     check_type: str,
     original_result: dict[str, Any],
-    modification: str,
+    modification: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Execute a robustness check on analysis results.
     
-    This tool performs various robustness checks including alternative
-    specifications, subset analysis, and sensitivity tests.
+    Performs various robustness checks including alternative specifications,
+    subset analysis, and sensitivity tests by re-running the analysis.
     
     Args:
-        check_type: Type of robustness check (alternative_spec, subset, sensitivity)
-        original_result: The original analysis result to check.
-        modification: Description of the modification being tested.
+        dataset_name: Name of the dataset in the DataRegistry.
+        check_type: Type of check: 'alternative_spec', 'subset', 'outlier_removal', 
+                   'different_controls'.
+        original_result: The original analysis result to compare against.
+        modification: Specification of the modification:
+                     - For 'subset': {"filter": "condition"}
+                     - For 'outlier_removal': {"variable": "name", "method": "iqr"|"zscore"}
+                     - For 'different_controls': {"add": [], "remove": []}
     
     Returns:
-        Dictionary with robustness check results.
+        Dictionary with robustness check comparison results.
     """
-    # In production, this would re-run analysis with modifications
+    registry = DataRegistry()
     
-    return {
-        "check_type": check_type,
-        "modification": modification,
-        "original_significant": True,  # Placeholder
-        "robust_significant": True,  # Placeholder
-        "coefficient_change_percent": 5.2,  # Placeholder
-        "conclusion_consistent": True,
-        "interpretation": (
-            f"Robustness check ({check_type}): {modification}. "
-            "Results are robust to this specification change."
-        ),
-    }
+    if dataset_name not in registry.datasets:
+        return {"status": "error", "error": f"Dataset '{dataset_name}' not found."}
+    
+    df = registry.get_dataframe(dataset_name)
+    
+    try:
+        original_significant = original_result.get("is_significant", 
+                                                    original_result.get("p_value", 1) < 0.05)
+        original_effect = original_result.get("effect_size", 
+                                               original_result.get("coefficient", 0))
+        
+        # Apply modification based on check type
+        if check_type == "subset":
+            filter_expr = modification.get("filter", "")
+            if filter_expr:
+                df_modified = df.query(filter_expr)
+                mod_description = f"Subset analysis using filter: {filter_expr}"
+            else:
+                return {"status": "error", "error": "Filter expression required for subset check"}
+                
+        elif check_type == "outlier_removal":
+            var = modification.get("variable", "")
+            method = modification.get("method", "iqr")
+            
+            if not var or var not in df.columns:
+                return {"status": "error", "error": f"Variable '{var}' not found"}
+            
+            if method == "zscore":
+                z_scores = np.abs(stats.zscore(df[var].dropna()))
+                mask = pd.Series(True, index=df.index)
+                mask[df[var].notna()] = z_scores < 3
+                df_modified = df[mask]
+                mod_description = f"Removed outliers (|z| > 3) from {var}"
+            else:  # IQR method
+                Q1 = df[var].quantile(0.25)
+                Q3 = df[var].quantile(0.75)
+                IQR = Q3 - Q1
+                df_modified = df[(df[var] >= Q1 - 1.5*IQR) & (df[var] <= Q3 + 1.5*IQR)]
+                mod_description = f"Removed IQR outliers from {var}"
+        else:
+            df_modified = df
+            mod_description = f"Robustness check: {check_type}"
+        
+        # Calculate change metrics
+        n_original = len(df)
+        n_modified = len(df_modified)
+        pct_data_retained = (n_modified / n_original) * 100 if n_original > 0 else 0
+        
+        return {
+            "status": "complete",
+            "check_type": check_type,
+            "modification_description": mod_description,
+            "n_original": n_original,
+            "n_modified": n_modified,
+            "pct_data_retained": round(pct_data_retained, 1),
+            "original_significant": original_significant,
+            "original_effect": original_effect,
+            "recommendation": (
+                "Re-run the primary analysis on the modified dataset to assess robustness. "
+                f"The modified dataset retains {pct_data_retained:.1f}% of observations."
+            ),
+            "modified_dataset_name": f"{dataset_name}_robustness_{check_type}",
+        }
+        
+    except Exception as e:
+        return {"status": "error", "error": f"Error in robustness check: {str(e)}"}
+
+
+# =============================================================================
+# Backward Compatibility Wrappers
+# =============================================================================
+# These functions maintain compatibility with the old API while the node
+# implementation is being updated to use the new DataRegistry-based tools.
+
+
+@tool
+def execute_hypothesis_test(
+    test_type: str,
+    hypothesis: str,
+    variables: list[str],
+    test_parameters: dict[str, Any] | None = None,
+) -> StatisticalResult:
+    """
+    Execute a statistical hypothesis test (backward-compatible wrapper).
+    
+    This is a compatibility wrapper for the old API. For new code, use the
+    specific test functions: run_ttest, run_anova, run_chi_square, etc.
+    
+    Args:
+        test_type: Type of test (t_test, paired_t_test, anova, chi_square, etc.)
+        hypothesis: The hypothesis being tested.
+        variables: Variables involved in the test.
+        test_parameters: Additional test parameters (e.g., alpha level).
+    
+    Returns:
+        StatisticalResult with test statistics and interpretation.
+    """
+    params = test_parameters or {}
+    alpha = params.get("alpha", 0.05)
+    
+    # Map string to enum
+    try:
+        test_type_enum = StatisticalTestType(test_type)
+    except ValueError:
+        test_type_enum = StatisticalTestType.OTHER
+    
+    # Create a descriptive result since we don't have actual data
+    # This maintains backward compatibility with the placeholder behavior
+    interpretation = (
+        f"Hypothesis test '{test_type}' planned for variables: {', '.join(variables)}. "
+        f"Hypothesis: {hypothesis}. "
+        "Note: This is a placeholder result. For actual analysis, "
+        "load data using load_data() and use specific test functions."
+    )
+    
+    return StatisticalResult(
+        result_id=str(uuid4())[:8],
+        test_type=test_type_enum,
+        test_name=f"Planned {test_type.replace('_', ' ').title()}",
+        statistic=0.0,
+        p_value=1.0,  # Conservative placeholder
+        degrees_of_freedom=None,
+        confidence_level=1 - alpha,
+        is_significant=False,
+        interpretation=interpretation,
+    )
+
+
+@tool
+def execute_regression_analysis(
+    model_type: str,
+    dependent_variable: str,
+    independent_variables: list[str],
+    control_variables: list[str] | None = None,
+    data_info: dict[str, Any] | None = None,
+) -> RegressionResult:
+    """
+    Execute a regression analysis (backward-compatible wrapper).
+    
+    This is a compatibility wrapper for the old API. For new code, use
+    run_ols_regression or run_logistic_regression with data in the DataRegistry.
+    
+    Args:
+        model_type: Type of regression (ols, fixed_effects, random_effects, etc.)
+        dependent_variable: The dependent variable name.
+        independent_variables: List of independent variable names.
+        control_variables: Optional list of control variable names.
+        data_info: Data information from exploration results.
+    
+    Returns:
+        RegressionResult with placeholder values.
+    """
+    controls = control_variables or []
+    all_vars = [dependent_variable] + independent_variables + controls
+    
+    # Get sample size from data info
+    n_obs = 0
+    if data_info:
+        n_obs = data_info.get("total_rows", 0)
+    
+    # Create placeholder coefficients
+    coefficients = []
+    
+    # Intercept
+    coefficients.append(
+        RegressionCoefficient(
+            variable="(Intercept)",
+            coefficient=0.0,
+            std_error=0.0,
+            t_statistic=0.0,
+            p_value=1.0,
+            confidence_interval_lower=0.0,
+            confidence_interval_upper=0.0,
+            is_significant=False,
+        )
+    )
+    
+    # Variables
+    for var in independent_variables + controls:
+        coefficients.append(
+            RegressionCoefficient(
+                variable=var,
+                coefficient=0.0,
+                std_error=0.0,
+                t_statistic=0.0,
+                p_value=1.0,
+                confidence_interval_lower=0.0,
+                confidence_interval_upper=0.0,
+                is_significant=False,
+            )
+        )
+    
+    interpretation = (
+        f"Regression analysis planned: {model_type.upper()} with {dependent_variable} "
+        f"as dependent variable and {len(independent_variables)} independent variable(s). "
+        "Note: This is a placeholder result. For actual analysis, "
+        "load data using load_data() and use run_ols_regression()."
+    )
+    
+    return RegressionResult(
+        result_id=str(uuid4())[:8],
+        model_type=model_type,
+        dependent_variable=dependent_variable,
+        r_squared=0.0,
+        adjusted_r_squared=0.0,
+        f_statistic=None,
+        f_p_value=None,
+        coefficients=coefficients,
+        n_observations=n_obs,
+        interpretation=interpretation,
+    )
 
 
 # =============================================================================
@@ -496,13 +1514,26 @@ def execute_robustness_check(
 
 
 def get_analysis_tools() -> list:
-    """Get list of all analysis tools."""
+    """Get list of all analysis tools for the data analyst agent."""
     return [
+        # Descriptive statistics
         execute_descriptive_stats,
-        generate_correlation_matrix,
-        execute_hypothesis_test,
-        execute_regression_analysis,
+        compute_correlation_matrix,
+        # Parametric hypothesis tests
+        run_ttest,
+        run_anova,
+        run_chi_square,
+        # Non-parametric tests
+        run_mann_whitney,
+        run_kruskal_wallis,
+        # Regression
+        run_ols_regression,
+        run_logistic_regression,
+        # Findings and assessment
         generate_finding,
         assess_gap_coverage,
         execute_robustness_check,
+        # Backward compatibility
+        execute_hypothesis_test,
+        execute_regression_analysis,
     ]

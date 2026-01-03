@@ -107,8 +107,9 @@ class TestSemanticScholarSearch:
         call_args = mock_client.get.call_args
         assert "year" in call_args.kwargs["params"]
     
+    @patch("src.tools.academic_search.time.sleep")
     @patch("src.tools.academic_search.httpx.Client")
-    def test_search_api_error(self, mock_client_class):
+    def test_search_api_error(self, mock_client_class, mock_sleep):
         """Test handling of API errors."""
         import httpx
         
@@ -128,6 +129,8 @@ class TestSemanticScholarSearch:
         
         assert "error" in result
         assert result["results"] == []
+        # Verify retries happened (sleep was called)
+        assert mock_sleep.call_count >= 1
 
 
 class TestArxivSearch:

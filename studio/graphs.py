@@ -19,11 +19,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from langgraph.graph import StateGraph, START, END
 
-from src.agents import create_react_agent, create_research_agent
+from src.agents import create_react_agent, create_research_agent, create_data_analyst_agent
 from src.state.schema import WorkflowState
 from src.state.enums import ResearchStatus
 from src.nodes import (
     intake_node,
+    data_explorer_node,
     literature_reviewer_node,
     literature_synthesizer_node,
     gap_identifier_node,
@@ -43,6 +44,7 @@ from src.config import settings
 # Note: Don't pass checkpointer/store - LangGraph API handles persistence
 react_agent = create_react_agent()
 research_agent = create_research_agent()
+data_analyst_agent = create_data_analyst_agent()
 
 
 # =============================================================================
@@ -50,31 +52,67 @@ research_agent = create_research_agent()
 # =============================================================================
 
 
-def route_after_intake(state: WorkflowState) -> Literal["literature_reviewer", "__end__"]:
-    """Route after intake node."""
+def route_after_intake(state: WorkflowState) -> Literal["data_explorer", "literature_reviewer", "__end__"]:
+    """Route after intake node.
+    
+    Routes to data_explorer if uploaded data files exist,
+    otherwise directly to literature_reviewer.
+    """
     if state.get("errors"):
         return END
     if state.get("status") == ResearchStatus.INTAKE_COMPLETE:
+        # Check if there are uploaded data files to explore
+        uploaded_data = state.get("uploaded_data", [])
+        if uploaded_data:
+            return "data_explorer"
         return "literature_reviewer"
     return END
 
 
-def route_after_literature_reviewer(state: WorkflowState) -> Literal["literature_synthesizer", "__end__"]:
-    """Route after literature reviewer node."""
+def route_after_data_explorer(state: WorkflowState) -> Literal["literature_reviewer", "__end__"]:
+    """Route after data explorer node."""
     if state.get("errors"):
+        # Check if errors are recoverable (data quality issues)
+        errors = state.get("errors", [])
+        if all(getattr(e, "recoverable", True) for e in errors):
+            # Continue with warnings
+            return "literature_reviewer"
         return END
-    if state.get("search_results"):
-        return "literature_synthesizer"
-    return END
+    return "literature_reviewer"
+
+
+def route_after_literature_reviewer(state: WorkflowState) -> Literal["literature_synthesizer", "__end__"]:
+    """Route after literature reviewer node.
+    
+    Continue workflow even without search results - the research can proceed
+    with the data analysis path. Only stop on fatal errors.
+    """
+    # Check for fatal (non-recoverable) errors only
+    errors = state.get("errors", [])
+    fatal_errors = [e for e in errors if hasattr(e, 'recoverable') and not e.recoverable]
+    if fatal_errors:
+        return END
+    
+    # Always proceed to synthesizer - even with empty results, we need to 
+    # acknowledge the literature gap and continue with data-driven research
+    return "literature_synthesizer"
 
 
 def route_after_synthesizer(state: WorkflowState) -> Literal["gap_identifier", "__end__"]:
-    """Route after literature synthesizer node."""
-    if state.get("errors"):
+    """Route after literature synthesizer node.
+    
+    Continue to gap identification even without full synthesis - the gap
+    identifier can work with partial information or generate gaps from
+    the research question alone.
+    """
+    # Only stop on fatal (non-recoverable) errors
+    errors = state.get("errors", [])
+    fatal_errors = [e for e in errors if hasattr(e, 'recoverable') and not e.recoverable]
+    if fatal_errors:
         return END
-    if state.get("literature_synthesis"):
-        return "gap_identifier"
-    return END
+    
+    # Always proceed to gap identifier - it can work with whatever we have
+    return "gap_identifier"
 
 
 def _route_after_gap_identifier(state: WorkflowState) -> Literal["planner", "__end__"]:
@@ -211,9 +249,16 @@ def create_research_workflow() -> StateGraph:
     Create the main research workflow graph.
     
     Current implementation (Sprints 1-6):
-    INTAKE -> LITERATURE_REVIEWER -> LITERATURE_SYNTHESIZER -> GAP_IDENTIFIER -> PLANNER
+    INTAKE -> [if data] DATA_EXPLORER -> LITERATURE_REVIEWER -> LITERATURE_SYNTHESIZER 
+        -> GAP_IDENTIFIER -> PLANNER
         -> [route by research type] -> DATA_ANALYST or CONCEPTUAL_SYNTHESIZER 
         -> WRITER -> END
+    
+    The DATA_EXPLORER node analyzes uploaded data files:
+    - Schema detection and summary statistics
+    - Data quality assessment
+    - Variable mapping to research questions
+    - Skipped if no data files are uploaded
     
     The GAP_IDENTIFIER node includes an interrupt() for human approval
     of the refined research question.
@@ -236,6 +281,7 @@ def create_research_workflow() -> StateGraph:
     - Caches LLM responses to avoid redundant computation
     - TTLs configured per node type for optimal freshness
     - Nodes with interrupt() (planner) are NOT cached
+    - DATA_EXPLORER is not cached (always analyze fresh data)
     """
     workflow = StateGraph(WorkflowState)
     
@@ -249,6 +295,9 @@ def create_research_workflow() -> StateGraph:
     # Add nodes (Sprints 1-4)
     # intake: No caching - always process fresh user input
     workflow.add_node("intake", intake_node)
+    
+    # data_explorer: No caching - always analyze fresh data
+    workflow.add_node("data_explorer", data_explorer_node)
     
     # literature_reviewer: Cache for 1 hour (API calls are expensive)
     workflow.add_node(
@@ -302,6 +351,11 @@ def create_research_workflow() -> StateGraph:
     workflow.add_conditional_edges(
         "intake",
         route_after_intake,
+        ["data_explorer", "literature_reviewer", END]
+    )
+    workflow.add_conditional_edges(
+        "data_explorer",
+        route_after_data_explorer,
         ["literature_reviewer", END]
     )
     workflow.add_conditional_edges(

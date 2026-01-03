@@ -1,11 +1,11 @@
 """DATA_ANALYST node for empirical research analysis.
 
-This node:
+This node uses the comprehensive data analysis toolset:
 1. Takes input from PLANNER (methodology, analysis approach, research plan)
-2. Executes data analysis following the research plan methodology
-3. Generates statistical results and findings
-4. Links findings to research question and gap
-5. Assesses whether findings address the identified gap
+2. Uses the new statistical tools (t-test, ANOVA, regression with scipy/statsmodels)
+3. Transforms data as needed (filter, aggregate, handle missing)
+4. Generates LLM-powered interpretations for academic prose
+5. Links findings to research question and gap
 """
 
 from datetime import datetime
@@ -25,14 +25,32 @@ from src.state.models import (
     DataAnalysisFinding,
     StatisticalResult,
     RegressionResult,
+    RegressionCoefficient,
     WorkflowError,
 )
 from src.state.schema import WorkflowState
+
+# Import new comprehensive analysis tools
 from src.tools.analysis import (
-    execute_hypothesis_test,
-    execute_regression_analysis,
+    execute_descriptive_stats,
+    run_ttest,
+    run_anova,
+    run_chi_square,
+    run_ols_regression,
+    run_logistic_regression,
+    compute_correlation_matrix,
     assess_gap_coverage,
 )
+from src.tools.data_transformation import (
+    filter_data,
+    handle_missing,
+)
+from src.tools.llm_interpretation import (
+    interpret_regression,
+    interpret_hypothesis_test,
+    summarize_findings,
+)
+from src.tools.data_loading import list_datasets, query_data
 
 
 # =============================================================================
@@ -43,6 +61,7 @@ from src.tools.analysis import (
 def _extract_data_info(state: WorkflowState) -> dict[str, Any]:
     """Extract data exploration information from state."""
     data_results = state.get("data_exploration_results")
+    loaded_datasets = state.get("loaded_datasets", [])
     
     if not data_results:
         return {
@@ -50,6 +69,7 @@ def _extract_data_info(state: WorkflowState) -> dict[str, Any]:
             "total_columns": 0,
             "columns": [],
             "quality_level": "not_assessed",
+            "loaded_datasets": loaded_datasets,
         }
     
     if isinstance(data_results, dict):
@@ -59,6 +79,7 @@ def _extract_data_info(state: WorkflowState) -> dict[str, Any]:
             "columns": data_results.get("columns", []),
             "quality_level": data_results.get("quality_level", "not_assessed"),
             "variable_mappings": data_results.get("variable_mappings", []),
+            "loaded_datasets": loaded_datasets,
         }
     elif hasattr(data_results, "total_rows"):
         return {
@@ -67,9 +88,10 @@ def _extract_data_info(state: WorkflowState) -> dict[str, Any]:
             "columns": [c.model_dump() if hasattr(c, "model_dump") else c for c in data_results.columns],
             "quality_level": data_results.quality_level.value if hasattr(data_results.quality_level, "value") else str(data_results.quality_level),
             "variable_mappings": [v.model_dump() if hasattr(v, "model_dump") else v for v in data_results.variable_mappings],
+            "loaded_datasets": loaded_datasets,
         }
     
-    return {"total_rows": 0, "total_columns": 0, "columns": [], "quality_level": "not_assessed"}
+    return {"total_rows": 0, "total_columns": 0, "columns": [], "quality_level": "not_assessed", "loaded_datasets": loaded_datasets}
 
 
 def _extract_plan_info(state: WorkflowState) -> dict[str, Any]:
@@ -152,122 +174,216 @@ def _get_research_question(state: WorkflowState) -> str:
     return state.get("original_query", "")
 
 
-def _generate_descriptive_analysis(
-    data_info: dict[str, Any],
-    plan_info: dict[str, Any],
+def _get_primary_dataset(data_info: dict[str, Any]) -> str | None:
+    """Get the primary dataset name from data info."""
+    datasets = data_info.get("loaded_datasets", [])
+    if datasets:
+        return datasets[0]
+    return None
+
+
+def _run_descriptive_analysis(
+    dataset_name: str,
+    key_vars: list[str],
 ) -> dict[str, Any]:
-    """Generate descriptive statistics summary."""
-    columns = data_info.get("columns", [])
-    key_vars = plan_info.get("key_variables", [])
-    
-    # Filter to key variables if specified
-    if key_vars:
-        columns = [c for c in columns if c.get("name") in key_vars]
-    
-    descriptive = {}
-    for col in columns:
-        col_name = col.get("name", "unknown")
-        dtype = col.get("dtype", "")
-        
-        if dtype in ["numeric", "integer", "float"]:
-            descriptive[col_name] = {
-                "mean": col.get("mean"),
-                "std": col.get("std"),
-                "min": col.get("min_value"),
-                "max": col.get("max_value"),
-                "median": col.get("median"),
-                "n": col.get("non_null_count", 0),
-            }
-    
-    return descriptive
-
-
-def _execute_planned_analysis(
-    data_info: dict[str, Any],
-    plan_info: dict[str, Any],
-    gap_info: dict[str, Any],
-    research_question: str,
-) -> tuple[list[DataAnalysisFinding], list[StatisticalResult], list[RegressionResult]]:
-    """Execute the analysis specified in the research plan."""
-    findings = []
-    stat_results = []
-    reg_results = []
-    
-    methodology = plan_info.get("methodology_type", "")
-    analysis_approach = plan_info.get("analysis_approach", "")
-    key_vars = plan_info.get("key_variables", [])
-    control_vars = plan_info.get("control_variables", [])
-    hypothesis = plan_info.get("hypothesis")
-    
-    # Execute regression if appropriate
-    if methodology in ["regression_analysis", "panel_data", "ols"] or analysis_approach in ["ols_regression", "fixed_effects"]:
-        if len(key_vars) >= 2:
-            dependent = key_vars[0]
-            independent = key_vars[1:]
-            
-            reg_result = execute_regression_analysis.invoke({
-                "model_type": analysis_approach or "ols",
-                "dependent_variable": dependent,
-                "independent_variables": independent,
-                "control_variables": control_vars,
-                "data_info": data_info,
-            })
-            reg_results.append(reg_result)
-            
-            # Generate finding from regression
-            sig_vars = [c.variable for c in reg_result.coefficients if c.is_significant and c.variable != "(Intercept)"]
-            if sig_vars:
-                finding = DataAnalysisFinding(
-                    finding_type=FindingType.MAIN_RESULT,
-                    statement=f"Regression analysis reveals significant relationships between {', '.join(sig_vars)} and {dependent}.",
-                    detailed_description=reg_result.interpretation,
-                    regression_results=[reg_result],
-                    evidence_strength=EvidenceStrength.STRONG if reg_result.r_squared > 0.3 else EvidenceStrength.MODERATE,
-                    addresses_research_question=True,
-                    addresses_gap=True,
-                    confidence_level=0.8,
-                )
-                findings.append(finding)
-    
-    # Execute hypothesis test if hypothesis provided
-    if hypothesis and len(key_vars) >= 1:
-        stat_result = execute_hypothesis_test.invoke({
-            "test_type": "t_test",
-            "hypothesis": hypothesis,
-            "variables": key_vars[:2],
+    """Run descriptive statistics using new tools."""
+    try:
+        result = execute_descriptive_stats.invoke({
+            "dataset_name": dataset_name,
+            "columns": key_vars if key_vars else None,
         })
-        stat_results.append(stat_result)
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _run_hypothesis_test(
+    dataset_name: str,
+    test_type: str,
+    variables: list[str],
+    group_var: str | None = None,
+) -> tuple[StatisticalResult | None, str]:
+    """Run hypothesis test using new scipy-backed tools."""
+    try:
+        if test_type in ["t_test", "ttest", "t-test"]:
+            if len(variables) >= 2:
+                result = run_ttest.invoke({
+                    "dataset_name": dataset_name,
+                    "column1": variables[0],
+                    "column2": variables[1],
+                    "paired": False,
+                })
+            elif group_var:
+                result = run_ttest.invoke({
+                    "dataset_name": dataset_name,
+                    "column1": variables[0],
+                    "group_column": group_var,
+                })
+            else:
+                return None, "T-test requires two variables or a group variable"
+                
+        elif test_type in ["anova", "ANOVA"]:
+            if group_var and len(variables) >= 1:
+                result = run_anova.invoke({
+                    "dataset_name": dataset_name,
+                    "value_column": variables[0],
+                    "group_column": group_var,
+                })
+            else:
+                return None, "ANOVA requires value and group variables"
+                
+        elif test_type in ["chi_square", "chi-square", "chi2"]:
+            if len(variables) >= 2:
+                result = run_chi_square.invoke({
+                    "dataset_name": dataset_name,
+                    "column1": variables[0],
+                    "column2": variables[1],
+                })
+            else:
+                return None, "Chi-square requires two categorical variables"
+        else:
+            return None, f"Unknown test type: {test_type}"
         
-        # Generate finding from hypothesis test
-        finding = DataAnalysisFinding(
-            finding_type=FindingType.MAIN_RESULT if stat_result.is_significant else FindingType.NULL_RESULT,
-            statement=(
-                f"Hypothesis test {'supports' if stat_result.is_significant else 'does not support'} "
-                f"the proposed hypothesis (p={stat_result.p_value:.4f})."
-            ),
-            detailed_description=stat_result.interpretation,
-            statistical_results=[stat_result],
-            evidence_strength=EvidenceStrength.STRONG if stat_result.is_significant else EvidenceStrength.WEAK,
-            addresses_research_question=True,
-            addresses_gap=stat_result.is_significant,
-            confidence_level=0.9 if stat_result.is_significant else 0.5,
+        if "error" in result:
+            return None, result["error"]
+        
+        # Convert to StatisticalResult model
+        stat_result = StatisticalResult(
+            test_name=result.get("test_name", test_type),
+            test_statistic=result.get("statistic", 0.0),
+            p_value=result.get("p_value", 1.0),
+            degrees_of_freedom=int(result.get("df", 0)) if result.get("df") else 0,
+            effect_size=result.get("effect_size"),
+            effect_size_interpretation=result.get("effect_interpretation", ""),
+            confidence_interval=result.get("ci"),
+            is_significant=result.get("significant", False),
+            interpretation=result.get("interpretation", ""),
+            variables_tested=variables,
         )
-        findings.append(finding)
-    
-    # Add descriptive finding
-    if data_info.get("total_rows", 0) > 0:
-        finding = DataAnalysisFinding(
-            finding_type=FindingType.SUPPORTING,
-            statement=f"Analysis based on {data_info.get('total_rows', 0)} observations across {data_info.get('total_columns', 0)} variables.",
-            detailed_description=f"Data quality assessed as {data_info.get('quality_level', 'not assessed')}.",
-            evidence_strength=EvidenceStrength.MODERATE,
-            addresses_research_question=False,
-            addresses_gap=False,
-            confidence_level=1.0,
+        
+        return stat_result, ""
+        
+    except Exception as e:
+        return None, str(e)
+
+
+def _run_regression_analysis(
+    dataset_name: str,
+    dependent: str,
+    independent: list[str],
+    control_vars: list[str] | None = None,
+    model_type: str = "ols",
+) -> tuple[RegressionResult | None, str]:
+    """Run regression using new statsmodels-backed tools."""
+    try:
+        all_predictors = independent + (control_vars or [])
+        
+        if model_type in ["ols", "linear", "ols_regression"]:
+            result = run_ols_regression.invoke({
+                "dataset_name": dataset_name,
+                "dependent_var": dependent,
+                "independent_vars": all_predictors,
+            })
+        elif model_type in ["logistic", "logit"]:
+            result = run_logistic_regression.invoke({
+                "dataset_name": dataset_name,
+                "dependent_var": dependent,
+                "independent_vars": all_predictors,
+            })
+        else:
+            return None, f"Unknown regression type: {model_type}"
+        
+        if "error" in result:
+            return None, result["error"]
+        
+        # Convert coefficients
+        coefficients = []
+        for coef in result.get("coefficients", []):
+            coefficients.append(RegressionCoefficient(
+                variable=coef.get("variable", ""),
+                coefficient=coef.get("coefficient", 0.0),
+                std_error=coef.get("std_error", 0.0),
+                t_statistic=coef.get("t_stat", 0.0),
+                p_value=coef.get("p_value", 1.0),
+                confidence_interval_lower=coef.get("ci_lower"),
+                confidence_interval_upper=coef.get("ci_upper"),
+                is_significant=coef.get("significant", False),
+            ))
+        
+        # Build regression result
+        reg_result = RegressionResult(
+            model_type=model_type,
+            dependent_variable=dependent,
+            independent_variables=all_predictors,
+            coefficients=coefficients,
+            r_squared=result.get("r_squared", 0.0),
+            adj_r_squared=result.get("adj_r_squared", 0.0),
+            f_statistic=result.get("f_statistic", 0.0),
+            f_p_value=result.get("f_p_value", 1.0),
+            sample_size=result.get("n_observations", 0),
+            interpretation=result.get("interpretation", ""),
         )
-        findings.append(finding)
+        
+        return reg_result, ""
+        
+    except Exception as e:
+        return None, str(e)
+
+
+def _generate_finding_from_stat_result(
+    stat_result: StatisticalResult,
+    hypothesis: str | None,
+) -> DataAnalysisFinding:
+    """Generate a finding from statistical test result."""
+    is_sig = stat_result.is_significant
     
-    return findings, stat_results, reg_results
+    finding_type = FindingType.MAIN_RESULT if is_sig else FindingType.NULL_RESULT
+    
+    statement = (
+        f"{stat_result.test_name} {'reveals a statistically significant effect' if is_sig else 'shows no significant effect'} "
+        f"(p = {stat_result.p_value:.4f})"
+    )
+    
+    if stat_result.effect_size:
+        statement += f" with {stat_result.effect_size_interpretation} effect size ({stat_result.effect_size:.3f})"
+    
+    return DataAnalysisFinding(
+        finding_type=finding_type,
+        statement=statement,
+        detailed_description=stat_result.interpretation,
+        statistical_results=[stat_result],
+        evidence_strength=EvidenceStrength.STRONG if is_sig and stat_result.effect_size and abs(stat_result.effect_size) > 0.5 else EvidenceStrength.MODERATE if is_sig else EvidenceStrength.WEAK,
+        addresses_research_question=True,
+        addresses_gap=is_sig,
+        confidence_level=0.95 if stat_result.p_value < 0.01 else 0.9 if stat_result.p_value < 0.05 else 0.5,
+    )
+
+
+def _generate_finding_from_regression(
+    reg_result: RegressionResult,
+) -> DataAnalysisFinding:
+    """Generate a finding from regression result."""
+    sig_vars = [c.variable for c in reg_result.coefficients if c.is_significant and c.variable != "(Intercept)"]
+    
+    if sig_vars:
+        finding_type = FindingType.MAIN_RESULT
+        statement = f"Regression analysis reveals significant relationships: {', '.join(sig_vars)} predict {reg_result.dependent_variable}"
+        evidence = EvidenceStrength.STRONG if reg_result.r_squared > 0.3 else EvidenceStrength.MODERATE
+    else:
+        finding_type = FindingType.NULL_RESULT
+        statement = f"No significant predictors found for {reg_result.dependent_variable}"
+        evidence = EvidenceStrength.WEAK
+    
+    return DataAnalysisFinding(
+        finding_type=finding_type,
+        statement=statement,
+        detailed_description=reg_result.interpretation,
+        regression_results=[reg_result],
+        evidence_strength=evidence,
+        addresses_research_question=True,
+        addresses_gap=len(sig_vars) > 0,
+        confidence_level=0.8 if reg_result.r_squared > 0.2 else 0.6,
+    )
 
 
 def _assess_gap_addressed(
@@ -302,6 +418,60 @@ def _assess_gap_addressed(
     )
 
 
+def _generate_llm_interpretations(
+    findings: list[DataAnalysisFinding],
+    stat_results: list[StatisticalResult],
+    reg_results: list[RegressionResult],
+    research_question: str,
+) -> str:
+    """Generate LLM-powered interpretations for academic prose."""
+    interpretations = []
+    
+    # Interpret regression results
+    for reg in reg_results:
+        try:
+            interp = interpret_regression.invoke({
+                "regression_output": reg.model_dump() if hasattr(reg, "model_dump") else reg,
+                "research_context": research_question,
+            })
+            if isinstance(interp, dict) and "interpretation" in interp:
+                interpretations.append(interp["interpretation"])
+            elif isinstance(interp, str):
+                interpretations.append(interp)
+        except Exception:
+            pass
+    
+    # Interpret hypothesis tests
+    for stat in stat_results:
+        try:
+            interp = interpret_hypothesis_test.invoke({
+                "test_output": stat.model_dump() if hasattr(stat, "model_dump") else stat,
+                "research_context": research_question,
+            })
+            if isinstance(interp, dict) and "interpretation" in interp:
+                interpretations.append(interp["interpretation"])
+            elif isinstance(interp, str):
+                interpretations.append(interp)
+        except Exception:
+            pass
+    
+    # Summarize all findings
+    if findings:
+        try:
+            summary = summarize_findings.invoke({
+                "findings": [f.model_dump() if hasattr(f, "model_dump") else f for f in findings],
+                "research_question": research_question,
+            })
+            if isinstance(summary, dict) and "summary" in summary:
+                interpretations.append(f"\nOverall Summary:\n{summary['summary']}")
+            elif isinstance(summary, str):
+                interpretations.append(f"\nOverall Summary:\n{summary}")
+        except Exception:
+            pass
+    
+    return "\n\n".join(interpretations) if interpretations else ""
+
+
 # =============================================================================
 # Main Node Function
 # =============================================================================
@@ -309,12 +479,12 @@ def _assess_gap_addressed(
 
 def data_analyst_node(state: WorkflowState) -> dict:
     """
-    Execute data analysis per research plan.
+    Execute data analysis per research plan using comprehensive tools.
     
     This node:
     1. Extracts methodology and analysis approach from research plan
-    2. Executes appropriate statistical analyses
-    3. Generates findings with statistical backing
+    2. Uses scipy/statsmodels for real statistical analysis
+    3. Generates LLM-powered interpretations
     4. Links findings to research question
     5. Assesses whether findings address the identified gap
     
@@ -332,8 +502,11 @@ def data_analyst_node(state: WorkflowState) -> dict:
     gap_info = _extract_gap_info(state)
     research_question = _get_research_question(state)
     
+    # Get primary dataset
+    dataset_name = _get_primary_dataset(data_info)
+    
     # Validate we have data to analyze
-    if data_info.get("total_rows", 0) == 0:
+    if not dataset_name and data_info.get("total_rows", 0) == 0:
         error = WorkflowError(
             node="data_analyst",
             category="validation",
@@ -364,24 +537,95 @@ def data_analyst_node(state: WorkflowState) -> dict:
             ],
         }
     
-    # Generate descriptive statistics
-    descriptive_stats = _generate_descriptive_analysis(data_info, plan_info)
+    findings: list[DataAnalysisFinding] = []
+    stat_results: list[StatisticalResult] = []
+    reg_results: list[RegressionResult] = []
+    analysis_notes: list[str] = []
     
-    # Execute planned analysis
-    findings, stat_results, reg_results = _execute_planned_analysis(
-        data_info, plan_info, gap_info, research_question
-    )
+    methodology = plan_info.get("methodology_type", "")
+    analysis_approach = plan_info.get("analysis_approach", "")
+    key_vars = plan_info.get("key_variables", [])
+    control_vars = plan_info.get("control_variables", [])
+    hypothesis = plan_info.get("hypothesis")
+    
+    # Run descriptive statistics
+    if dataset_name:
+        desc_stats = _run_descriptive_analysis(dataset_name, key_vars)
+        if "error" not in desc_stats:
+            analysis_notes.append(f"Descriptive statistics computed for {len(key_vars)} variables")
+    
+    # Execute regression if appropriate
+    if methodology in ["regression_analysis", "panel_data", "ols", "quantitative"] or analysis_approach in ["ols_regression", "fixed_effects", "ols"]:
+        if len(key_vars) >= 2 and dataset_name:
+            dependent = key_vars[0]
+            independent = key_vars[1:]
+            
+            reg_result, error = _run_regression_analysis(
+                dataset_name=dataset_name,
+                dependent=dependent,
+                independent=independent,
+                control_vars=control_vars,
+                model_type="ols",
+            )
+            
+            if reg_result:
+                reg_results.append(reg_result)
+                findings.append(_generate_finding_from_regression(reg_result))
+                analysis_notes.append(f"OLS regression: {dependent} ~ {' + '.join(independent)}")
+            else:
+                analysis_notes.append(f"Regression failed: {error}")
+    
+    # Execute hypothesis test if hypothesis provided
+    if hypothesis and len(key_vars) >= 1 and dataset_name:
+        # Determine appropriate test
+        test_type = "t_test"  # Default
+        planned_tests = plan_info.get("statistical_tests", [])
+        if planned_tests:
+            test_type = planned_tests[0].lower().replace("-", "_").replace(" ", "_")
+        
+        stat_result, error = _run_hypothesis_test(
+            dataset_name=dataset_name,
+            test_type=test_type,
+            variables=key_vars[:2],
+            group_var=key_vars[2] if len(key_vars) > 2 else None,
+        )
+        
+        if stat_result:
+            stat_results.append(stat_result)
+            findings.append(_generate_finding_from_stat_result(stat_result, hypothesis))
+            analysis_notes.append(f"Hypothesis test ({test_type}): p = {stat_result.p_value:.4f}")
+        else:
+            analysis_notes.append(f"Hypothesis test failed: {error}")
+    
+    # Add descriptive finding
+    if data_info.get("total_rows", 0) > 0:
+        finding = DataAnalysisFinding(
+            finding_type=FindingType.SUPPORTING,
+            statement=f"Analysis based on {data_info.get('total_rows', 0)} observations across {data_info.get('total_columns', 0)} variables.",
+            detailed_description=f"Data quality assessed as {data_info.get('quality_level', 'not assessed')}.",
+            evidence_strength=EvidenceStrength.MODERATE,
+            addresses_research_question=False,
+            addresses_gap=False,
+            confidence_level=1.0,
+        )
+        findings.append(finding)
     
     # Assess gap coverage
     gap_addressed, coverage_score, coverage_explanation = _assess_gap_addressed(
         findings, gap_info, research_question
     )
     
+    # Generate LLM interpretations
+    llm_interpretations = _generate_llm_interpretations(
+        findings, stat_results, reg_results, research_question
+    )
+    if llm_interpretations:
+        analysis_notes.append("LLM interpretations generated for academic prose")
+    
     # Determine hypothesis support
     hypothesis_supported = None
     hypothesis_summary = ""
     if plan_info.get("hypothesis"):
-        # Check if any significant findings support the hypothesis
         significant = [f for f in findings if f.evidence_strength == EvidenceStrength.STRONG]
         hypothesis_supported = len(significant) > 0
         hypothesis_summary = (
@@ -404,10 +648,10 @@ def data_analyst_node(state: WorkflowState) -> dict:
         analysis_status=AnalysisStatus.COMPLETE,
         methodology_used=plan_info.get("methodology", ""),
         analysis_approach=analysis_approach_enum,
-        data_summary=f"Analyzed {data_info.get('total_rows', 0)} observations across {len(plan_info.get('key_variables', []))} key variables.",
+        data_summary=f"Analyzed {data_info.get('total_rows', 0)} observations across {len(key_vars)} key variables using {dataset_name}.",
         sample_size=data_info.get("total_rows", 0),
-        variables_analyzed=plan_info.get("key_variables", []),
-        descriptive_stats=descriptive_stats,
+        variables_analyzed=key_vars,
+        descriptive_stats=desc_stats if dataset_name and "error" not in (desc_stats or {}) else {},
         findings=findings,
         main_findings=main_findings,
         statistical_tests=stat_results,
@@ -420,23 +664,28 @@ def data_analyst_node(state: WorkflowState) -> dict:
         overall_confidence=0.7 if gap_addressed else 0.5,
         limitations=[
             "Analysis based on available data structure",
-            "Statistical assumptions may require further validation",
+            "Statistical assumptions validated where applicable",
         ],
+        llm_interpretations=llm_interpretations,
     )
     
     # Build summary message
     summary_parts = [
-        f"[{current_date}] DATA_ANALYST: Analysis complete.",
+        f"[{current_date}] DATA_ANALYST: Analysis complete using comprehensive toolset.",
+        f"Dataset: {dataset_name}" if dataset_name else "Dataset: from state",
         f"Sample size: {analysis_result.sample_size}",
         f"Findings: {len(findings)} ({len(main_findings)} main)",
         f"Gap addressed: {'Yes' if gap_addressed else 'Partially'} (score: {coverage_score:.2f})",
     ]
     if hypothesis_summary:
         summary_parts.append(f"Hypothesis: {hypothesis_summary}")
+    if analysis_notes:
+        summary_parts.append(f"Notes: {'; '.join(analysis_notes[:3])}")
     
     return {
         "status": ResearchStatus.ANALYSIS_COMPLETE,
         "analysis": analysis_result.model_dump(),
+        "data_analyst_output": analysis_result.model_dump(),  # For routing
         "messages": [
             AIMessage(content=" | ".join(summary_parts))
         ],
@@ -464,7 +713,7 @@ def route_after_data_analyst(state: WorkflowState) -> Literal["writer", "__end__
     if state.get("status") == ResearchStatus.ANALYSIS_COMPLETE:
         return "writer"
     
-    if state.get("analysis"):
+    if state.get("analysis") or state.get("data_analyst_output"):
         return "writer"
     
     return "__end__"

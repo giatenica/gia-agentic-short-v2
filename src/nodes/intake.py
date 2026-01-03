@@ -9,6 +9,7 @@ This node is the entry point for all research projects. It:
 Uses HITL interrupt if validation errors are found.
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -199,32 +200,46 @@ def process_uploaded_files(file_paths: list[str] | None) -> list[DataFile]:
     if not file_paths:
         return []
     
+    # Supported data file extensions
+    supported_extensions = {
+        ".csv": "text/csv",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls": "application/vnd.ms-excel",
+        ".json": "application/json",
+        ".parquet": "application/octet-stream",
+        ".dta": "application/x-stata",
+        ".sav": "application/x-spss-sav",
+        ".zip": "application/zip",
+    }
+    
     data_files = []
+    
+    def add_file(file_path: Path) -> None:
+        """Add a file to data_files if it's a supported type."""
+        if file_path.suffix.lower() in supported_extensions:
+            content_type = supported_extensions[file_path.suffix.lower()]
+            data_files.append(DataFile(
+                filename=file_path.name,
+                filepath=file_path,
+                content_type=content_type,
+                size_bytes=file_path.stat().st_size,
+            ))
+    
     for filepath in file_paths:
         path = Path(filepath)
         if path.exists():
-            # Detect content type from extension
-            content_types = {
-                ".csv": "text/csv",
-                ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                ".xls": "application/vnd.ms-excel",
-                ".json": "application/json",
-                ".parquet": "application/octet-stream",
-                ".dta": "application/x-stata",
-                ".sav": "application/x-spss-sav",
-                ".zip": "application/zip",
-            }
-            content_type = content_types.get(
-                path.suffix.lower(), 
-                "application/octet-stream"
-            )
-            
-            data_files.append(DataFile(
-                filename=path.name,
-                filepath=path,
-                content_type=content_type,
-                size_bytes=path.stat().st_size,
-            ))
+            if path.is_dir():
+                # Recursively find all data files in directory
+                for root, dirs, files in os.walk(path):
+                    # Skip hidden directories
+                    dirs[:] = [d for d in dirs if not d.startswith('.')]
+                    for filename in files:
+                        if not filename.startswith('.'):
+                            file_path = Path(root) / filename
+                            add_file(file_path)
+            else:
+                # Single file
+                add_file(path)
     
     return data_files
 

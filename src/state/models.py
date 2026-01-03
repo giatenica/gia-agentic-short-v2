@@ -1357,6 +1357,10 @@ class DataAnalysisResult(BaseModel):
         default="",
         description="Summary of robustness checks"
     )
+    llm_interpretations: str = Field(
+        default="",
+        description="LLM-generated academic interpretations of results"
+    )
     
     @property
     def finding_count(self) -> int:

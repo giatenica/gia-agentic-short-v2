@@ -378,5 +378,173 @@ class TestColumnTypeMapping:
         assert get_column_type(np.dtype('object')) == ColumnType.STRING
 
 
+@pytest.mark.skipif(not HAS_PANDAS, reason="pandas not installed")
+class TestZipFileHandling:
+    """Test ZIP file extraction and analysis."""
+    
+    @pytest.fixture
+    def zip_with_csv(self):
+        """Create a ZIP file containing CSV data."""
+        import zipfile
+        
+        # Create temp dir and CSV file
+        temp_dir = tempfile.mkdtemp()
+        csv_path = os.path.join(temp_dir, "data.csv")
+        
+        with open(csv_path, 'w') as f:
+            f.write("id,name,value\n")
+            f.write("1,Alice,100\n")
+            f.write("2,Bob,200\n")
+            f.write("3,Charlie,150\n")
+        
+        # Create ZIP file
+        zip_path = os.path.join(temp_dir, "data.zip")
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(csv_path, "data.csv")
+        
+        yield zip_path
+        
+        # Cleanup
+        import shutil
+        shutil.rmtree(temp_dir)
+    
+    @pytest.fixture
+    def zip_with_multiple_files(self):
+        """Create a ZIP file containing multiple CSV files."""
+        import zipfile
+        
+        temp_dir = tempfile.mkdtemp()
+        
+        # Create first CSV
+        csv1_path = os.path.join(temp_dir, "prices.csv")
+        with open(csv1_path, 'w') as f:
+            f.write("date,ticker,price\n")
+            f.write("2024-01-01,GOOG,150\n")
+            f.write("2024-01-02,GOOG,152\n")
+        
+        # Create second CSV
+        csv2_path = os.path.join(temp_dir, "volume.csv")
+        with open(csv2_path, 'w') as f:
+            f.write("date,ticker,volume\n")
+            f.write("2024-01-01,GOOG,1000000\n")
+            f.write("2024-01-02,GOOG,1200000\n")
+        
+        # Create ZIP file
+        zip_path = os.path.join(temp_dir, "market_data.zip")
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(csv1_path, "prices.csv")
+            zf.write(csv2_path, "volume.csv")
+        
+        yield zip_path
+        
+        import shutil
+        shutil.rmtree(temp_dir)
+    
+    @pytest.fixture
+    def zip_with_no_data_files(self):
+        """Create a ZIP file with no analyzable data files."""
+        import zipfile
+        
+        temp_dir = tempfile.mkdtemp()
+        
+        # Create a text file (not analyzable)
+        txt_path = os.path.join(temp_dir, "readme.txt")
+        with open(txt_path, 'w') as f:
+            f.write("This is just a readme file.")
+        
+        # Create ZIP file
+        zip_path = os.path.join(temp_dir, "no_data.zip")
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(txt_path, "readme.txt")
+        
+        yield zip_path
+        
+        import shutil
+        shutil.rmtree(temp_dir)
+    
+    def test_analyze_zip_with_csv(self, zip_with_csv):
+        """Test analyzing a ZIP file containing a CSV."""
+        from src.tools.data_exploration import analyze_file
+        
+        data_file = DataFile(
+            filename="data.zip",
+            filepath=Path(zip_with_csv),
+            content_type="application/zip",
+            size_bytes=os.path.getsize(zip_with_csv),
+        )
+        
+        result = analyze_file(data_file)
+        
+        assert result.total_rows == 3
+        assert result.total_columns == 3
+        assert len(result.columns) == 3
+        assert result.quality_score > 0
+        assert "suitable for analysis" in result.feasibility_assessment.lower() or "successfully" in result.feasibility_assessment.lower()
+    
+    def test_analyze_zip_with_multiple_files(self, zip_with_multiple_files):
+        """Test analyzing a ZIP file containing multiple CSVs."""
+        from src.tools.data_exploration import analyze_file
+        
+        data_file = DataFile(
+            filename="market_data.zip",
+            filepath=Path(zip_with_multiple_files),
+            content_type="application/zip",
+            size_bytes=os.path.getsize(zip_with_multiple_files),
+        )
+        
+        result = analyze_file(data_file)
+        
+        # Should have aggregated results from both files
+        assert result.total_rows == 4  # 2 rows from each file
+        assert result.total_columns == 6  # 3 columns from each file
+        assert len(result.files_analyzed) >= 2  # Original ZIP + extracted files
+        assert "2 of 2" in result.feasibility_assessment or result.total_rows > 0
+    
+    def test_analyze_zip_with_no_data_files(self, zip_with_no_data_files):
+        """Test analyzing a ZIP file with no analyzable data."""
+        from src.tools.data_exploration import analyze_file
+        
+        data_file = DataFile(
+            filename="no_data.zip",
+            filepath=Path(zip_with_no_data_files),
+            content_type="application/zip",
+            size_bytes=os.path.getsize(zip_with_no_data_files),
+        )
+        
+        result = analyze_file(data_file)
+        
+        assert result.total_rows == 0
+        assert result.total_columns == 0
+        assert len(result.quality_issues) > 0
+        assert any("no" in issue.description.lower() and "data" in issue.description.lower() 
+                   for issue in result.quality_issues)
+    
+    def test_analyze_invalid_zip(self):
+        """Test analyzing a file that's not a valid ZIP."""
+        from src.tools.data_exploration import analyze_file
+        
+        # Create a fake "zip" file that's actually just text
+        fd, filepath = tempfile.mkstemp(suffix='.zip')
+        with os.fdopen(fd, 'w') as f:
+            f.write("This is not a ZIP file")
+        
+        try:
+            data_file = DataFile(
+                filename="fake.zip",
+                filepath=Path(filepath),
+                content_type="application/zip",
+                size_bytes=os.path.getsize(filepath),
+            )
+            
+            result = analyze_file(data_file)
+            
+            assert result.total_rows == 0
+            assert len(result.quality_issues) > 0
+            assert any("invalid" in issue.description.lower() or "not a valid" in issue.description.lower()
+                       for issue in result.quality_issues)
+        finally:
+            os.unlink(filepath)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

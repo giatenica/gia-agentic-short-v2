@@ -499,6 +499,9 @@ def literature_synthesizer_node(state: WorkflowState) -> dict[str, Any]:
     - Creates contribution statement
     - Refines research question
     
+    Handles empty search results gracefully by acknowledging the literature
+    gap and proceeding with data-driven research.
+    
     Args:
         state: Current workflow state with search_results.
         
@@ -521,6 +524,44 @@ def literature_synthesizer_node(state: WorkflowState) -> dict[str, Any]:
             "messages": [AIMessage(
                 content="Cannot synthesize literature without a research question."
             )],
+        }
+    
+    # Handle empty search results (e.g., from rate limiting or novel topic)
+    if not search_results:
+        return {
+            "status": ResearchStatus.GAP_IDENTIFICATION_COMPLETE,
+            "literature_synthesis": (
+                "Literature search returned no results. This may indicate: "
+                "(1) API rate limiting during search, (2) a novel research area "
+                "with limited existing literature, or (3) highly specific query terms. "
+                "The research will proceed with data-driven analysis as the primary approach."
+            ),
+            "literature_themes": ["Data-driven research approach"],
+            "identified_gaps": [
+                "Existing literature on this specific topic appears limited or inaccessible. "
+                "This presents an opportunity for original contribution through empirical analysis."
+            ],
+            "contribution_statement": (
+                "Given the limited accessible literature, this research will make an "
+                "empirical contribution by analyzing the available data to generate "
+                "insights and findings that can inform future work in this area."
+            ),
+            "refined_query": original_query,  # Keep original query
+            "messages": [AIMessage(
+                content=(
+                    "Literature Synthesis: No search results available\n\n"
+                    "The literature search did not return results (possibly due to API "
+                    "rate limiting or a novel research area). The workflow will continue "
+                    "with a data-driven approach, using the uploaded datasets as the "
+                    "primary source of analysis.\n\n"
+                    "This can be an advantage: the research may produce original empirical "
+                    "findings without being constrained by existing paradigms."
+                )
+            )],
+            "checkpoints": [
+                f"{datetime.utcnow().isoformat()}: Literature synthesis - no results, proceeding data-driven"
+            ],
+            "updated_at": datetime.utcnow(),
         }
     
     try:

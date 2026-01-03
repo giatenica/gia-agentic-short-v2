@@ -86,6 +86,9 @@ class WorkflowState(TypedDict, total=False):
     # Uploaded data files
     uploaded_data: list[DataFile]
     
+    # Dataset names loaded into DataRegistry (from data_explorer)
+    loaded_datasets: list[str]
+    
     # User's description of their data
     data_context: str | None
     
@@ -250,6 +253,7 @@ def create_initial_state(
         
         # Data
         "uploaded_data": [],
+        "loaded_datasets": [],
         "data_context": None,
         "data_exploration_results": None,
         "key_variables": [],
