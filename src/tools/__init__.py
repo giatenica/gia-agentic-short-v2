@@ -117,6 +117,14 @@ from src.tools.data_transformation import (
     get_transformation_tools,
     DATA_TRANSFORMATION_TOOLS,
 )
+from src.tools.external_data import (
+    acquire_stock_data,
+    acquire_economic_indicator,
+    acquire_crypto_data,
+    fetch_api_json,
+    list_available_data_sources,
+    get_external_data_tools,
+)
 
 # Tool collections
 GAP_ANALYSIS_TOOLS = [
@@ -131,6 +139,7 @@ CONTRIBUTION_TOOLS = [
 
 ANALYSIS_TOOLS = get_analysis_tools()
 SYNTHESIS_TOOLS = get_synthesis_tools()
+EXTERNAL_DATA_TOOLS = get_external_data_tools()
 
 __all__ = [
     # Search tools
@@ -247,4 +256,12 @@ __all__ = [
     "melt_data",
     "get_transformation_tools",
     "DATA_TRANSFORMATION_TOOLS",
+    # External data tools (Sprint 13)
+    "acquire_stock_data",
+    "acquire_economic_indicator",
+    "acquire_crypto_data",
+    "fetch_api_json",
+    "list_available_data_sources",
+    "get_external_data_tools",
+    "EXTERNAL_DATA_TOOLS",
 ]
