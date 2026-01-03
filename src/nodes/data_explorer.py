@@ -1,11 +1,15 @@
 """DATA_EXPLORER node for analyzing uploaded research data.
 
+Sprint 12 Enhanced: Now includes deep profiling, LLM-generated prose summaries,
+intelligent type inference, and comprehensive DataExplorationSummary output.
+
 This node uses the comprehensive data analysis toolset:
 1. Loads data using DuckDB-backed DataRegistry (supports CSV, Parquet, Excel, Stata, SPSS, JSON, ZIP)
-2. Profiles datasets with statistical summaries
-3. Identifies data quality issues
-4. Assesses feasibility for research
-5. Maps variables to research questions
+2. Profiles datasets with statistical summaries and semantic type inference
+3. Identifies data quality issues with QualityFlag enum
+4. Detects data structure (panel, time series, cross-sectional)
+5. Generates LLM prose summaries for Methods section
+6. Assesses feasibility for research
 
 Uses parallel processing for efficient handling of multiple large files.
 """
@@ -20,7 +24,7 @@ import logging
 
 from langchain_core.messages import AIMessage
 
-from src.state.enums import ResearchStatus, DataQualityLevel, ColumnType, CritiqueSeverity
+from src.state.enums import ResearchStatus, DataQualityLevel, ColumnType, CritiqueSeverity, QualityFlag, DataStructureType
 from src.state.models import (
     DataFile,
     DataExplorationResult,
@@ -28,6 +32,9 @@ from src.state.models import (
     ColumnAnalysis,
     QualityIssue,
     WorkflowError,
+    DatasetInfo,
+    QualityFlagItem,
+    DataExplorationSummary,
 )
 from src.state.schema import WorkflowState
 
@@ -41,6 +48,13 @@ from src.tools.data_loading import (
 from src.tools.data_profiling import (
     profile_dataset,
     describe_dataset,
+    # Sprint 12 enhanced tools
+    deep_profile_dataset,
+    detect_data_types,
+    assess_data_quality,
+    identify_time_series,
+    detect_panel_structure,
+    generate_data_prose_summary,
 )
 
 logger = logging.getLogger(__name__)
@@ -499,6 +513,13 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
     # Generate summary message
     message = generate_exploration_summary(exploration_results, variable_mappings, all_datasets)
     
+    # PHASE 4 (Sprint 12): Generate DataExplorationSummary with LLM prose
+    data_exploration_summary = _generate_exploration_summary_sprint12(
+        all_datasets, 
+        research_question,
+        key_variables
+    )
+    
     # Determine overall feasibility
     all_feasible = all(r.quality_score >= 0.4 for r in exploration_results)
     overall_quality = min(r.quality_score for r in exploration_results)
@@ -510,6 +531,7 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
     return {
         "status": status,
         "data_exploration_results": primary_result,
+        "data_exploration_summary": data_exploration_summary,  # Sprint 12
         "all_exploration_results": exploration_results,  # Store all results for reference
         "variable_mappings": variable_mappings,
         "loaded_datasets": all_datasets,
@@ -521,6 +543,76 @@ def data_explorer_node(state: WorkflowState) -> dict[str, Any]:
         ],
         "updated_at": datetime.now(timezone.utc),
     }
+
+
+def _generate_exploration_summary_sprint12(
+    dataset_names: list[str],
+    research_context: str | None,
+    focus_variables: list[str] | None,
+) -> DataExplorationSummary | None:
+    """
+    Generate Sprint 12 DataExplorationSummary with LLM prose.
+    
+    Uses the new enhanced profiling tools to create a comprehensive
+    summary suitable for the Methods section.
+    
+    Args:
+        dataset_names: Names of loaded datasets
+        research_context: Research question for context
+        focus_variables: Key variables to emphasize
+        
+    Returns:
+        DataExplorationSummary or None if generation fails
+    """
+    if not dataset_names:
+        return None
+    
+    try:
+        logger.info(f"Generating Sprint 12 exploration summary for {len(dataset_names)} datasets")
+        
+        # Use the new LLM summarization tool
+        result = generate_data_prose_summary.invoke({
+            "dataset_names": dataset_names,
+            "research_context": research_context,
+            "focus_variables": focus_variables,
+        })
+        
+        if "error" in result:
+            logger.warning(f"Failed to generate prose summary: {result['error']}")
+            return None
+        
+        # Extract the summary from result
+        summary_dict = result.get("summary")
+        if summary_dict:
+            # Reconstruct DataExplorationSummary from dict
+            dataset_inventory = [
+                DatasetInfo(**d) if isinstance(d, dict) else d
+                for d in summary_dict.get("dataset_inventory", [])
+            ]
+            
+            quality_flags = [
+                QualityFlagItem(**f) if isinstance(f, dict) else f
+                for f in summary_dict.get("quality_flags", [])
+            ]
+            
+            summary = DataExplorationSummary(
+                prose_description=summary_dict.get("prose_description", ""),
+                dataset_inventory=dataset_inventory,
+                quality_flags=quality_flags,
+                recommended_variables=summary_dict.get("recommended_variables", []),
+                data_gaps=summary_dict.get("data_gaps", []),
+            )
+            
+            logger.info(f"Sprint 12 summary generated: {len(summary.prose_description)} chars prose, "
+                       f"{len(summary.quality_flags)} quality flags")
+            
+            return summary
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error generating Sprint 12 summary: {e}")
+        return None
 
 
 def map_variables_to_columns(

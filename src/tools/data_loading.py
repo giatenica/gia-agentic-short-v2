@@ -1,5 +1,8 @@
 """Data loading tools for various file formats.
 
+Sprint 12 Enhanced: Now includes automatic encoding detection and delimiter sniffing
+for robust CSV handling.
+
 Provides unified data loading from:
 - CSV, Excel, Parquet, JSON (via pandas)
 - SQLite, DuckDB databases
@@ -36,6 +39,13 @@ try:
     HAS_PYREADSTAT = True
 except ImportError:
     HAS_PYREADSTAT = False
+
+# Charset detection for encoding
+try:
+    import charset_normalizer
+    HAS_CHARSET = True
+except ImportError:
+    HAS_CHARSET = False
 
 
 # =============================================================================
@@ -252,16 +262,126 @@ def load_data(filepath: str, name: str | None = None, options: dict | None = Non
 
 
 def _load_csv(filepath: str, options: dict) -> "pd.DataFrame":
-    """Load CSV file."""
+    """
+    Load CSV file with automatic encoding detection and delimiter sniffing.
+    
+    Sprint 12 Enhancement: Automatically detects:
+    - File encoding (UTF-8, Latin-1, Windows-1252, etc.)
+    - Delimiter (comma, semicolon, tab, pipe)
+    
+    Falls back to DuckDB for very large files (>100MB).
+    """
+    import csv
+    
     # Check file size for large file handling
     size_mb = Path(filepath).stat().st_size / 1024 / 1024
     
     if size_mb > 100 and HAS_DUCKDB:
-        # Use DuckDB for large files
+        # Use DuckDB for large files (it auto-detects encoding/delimiter)
         conn = duckdb.connect(":memory:")
         return conn.execute(f"SELECT * FROM read_csv_auto('{filepath}')").fetchdf()
     
-    return pd.read_csv(filepath, **options)
+    # Auto-detect encoding if not specified
+    if "encoding" not in options:
+        detected_encoding = _detect_encoding(filepath)
+        if detected_encoding:
+            options["encoding"] = detected_encoding
+    
+    # Auto-detect delimiter if not specified
+    if "sep" not in options and "delimiter" not in options:
+        detected_delimiter = _detect_delimiter(filepath, options.get("encoding", "utf-8"))
+        if detected_delimiter:
+            options["sep"] = detected_delimiter
+    
+    try:
+        return pd.read_csv(filepath, **options)
+    except UnicodeDecodeError:
+        # Fallback to latin-1 if encoding detection failed
+        options["encoding"] = "latin-1"
+        return pd.read_csv(filepath, **options)
+
+
+def _detect_encoding(filepath: str) -> str | None:
+    """
+    Detect file encoding using charset_normalizer or fallback heuristics.
+    
+    Args:
+        filepath: Path to the file
+        
+    Returns:
+        Detected encoding name or None
+    """
+    if HAS_CHARSET:
+        try:
+            with open(filepath, "rb") as f:
+                # Read first 100KB for detection
+                sample = f.read(100 * 1024)
+            
+            result = charset_normalizer.from_bytes(sample).best()
+            if result:
+                return result.encoding
+        except Exception:
+            pass
+    
+    # Fallback: Try common encodings
+    encodings_to_try = ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]
+    
+    for encoding in encodings_to_try:
+        try:
+            with open(filepath, "r", encoding=encoding) as f:
+                # Try to read first few KB
+                f.read(10 * 1024)
+            return encoding
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    
+    return "utf-8"  # Default fallback
+
+
+def _detect_delimiter(filepath: str, encoding: str = "utf-8") -> str | None:
+    """
+    Detect CSV delimiter using csv.Sniffer or heuristics.
+    
+    Args:
+        filepath: Path to the CSV file
+        encoding: File encoding to use
+        
+    Returns:
+        Detected delimiter or None
+    """
+    import csv
+    
+    try:
+        with open(filepath, "r", encoding=encoding, errors="replace") as f:
+            # Read first 64KB for detection
+            sample = f.read(64 * 1024)
+        
+        # Use csv.Sniffer to detect dialect
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+            return dialect.delimiter
+        except csv.Error:
+            pass
+        
+        # Fallback: Count delimiters in first line
+        first_line = sample.split("\n")[0] if "\n" in sample else sample
+        
+        delimiters = {
+            ",": first_line.count(","),
+            ";": first_line.count(";"),
+            "\t": first_line.count("\t"),
+            "|": first_line.count("|"),
+        }
+        
+        # Return delimiter with most occurrences (if > 0)
+        max_count = max(delimiters.values())
+        if max_count > 0:
+            return max(delimiters, key=delimiters.get)
+        
+    except Exception:
+        pass
+    
+    return None  # Let pandas use default
 
 
 def _load_excel(filepath: str, options: dict) -> "pd.DataFrame":
