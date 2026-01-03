@@ -327,14 +327,14 @@ class TestRouteAfterDataExplorer:
         result = route_after_data_explorer(state)
         assert result == "literature_reviewer"
     
-    def test_route_to_end_with_fatal_errors(self):
-        """Test routing to end with fatal errors."""
+    def test_route_to_fallback_with_fatal_errors(self):
+        """Test routing to fallback with fatal (unrecoverable) errors."""
         error = MagicMock()
         error.recoverable = False
         state = {"errors": [error]}
         
         result = route_after_data_explorer(state)
-        assert result == "__end__"
+        assert result == "fallback"
 
 
 class TestRouteAfterLiteratureReviewer:
@@ -346,14 +346,14 @@ class TestRouteAfterLiteratureReviewer:
         result = route_after_literature_reviewer(state)
         assert result == "literature_synthesizer"
     
-    def test_route_to_end_with_fatal_errors(self):
-        """Test routing to end with fatal errors."""
+    def test_route_to_fallback_with_fatal_errors(self):
+        """Test routing to fallback with fatal (unrecoverable) errors."""
         error = MagicMock()
         error.recoverable = False
         state = {"errors": [error]}
         
         result = route_after_literature_reviewer(state)
-        assert result == "__end__"
+        assert result == "fallback"
 
 
 class TestRouteAfterSynthesizer:
@@ -365,14 +365,14 @@ class TestRouteAfterSynthesizer:
         result = route_after_synthesizer(state)
         assert result == "gap_identifier"
     
-    def test_route_to_end_with_fatal_errors(self):
-        """Test routing to end with fatal errors."""
+    def test_route_to_fallback_with_fatal_errors(self):
+        """Test routing to fallback with fatal (unrecoverable) errors."""
         error = MagicMock()
         error.recoverable = False
         state = {"errors": [error]}
         
         result = route_after_synthesizer(state)
-        assert result == "__end__"
+        assert result == "fallback"
 
 
 class TestRouteAfterGapIdentifier:
@@ -799,7 +799,9 @@ class TestConstants:
     def test_workflow_nodes_order(self):
         """Test workflow nodes are in expected order."""
         assert WORKFLOW_NODES[0] == "intake"
-        assert WORKFLOW_NODES[-1] == "output"
+        # output is second-to-last, fallback is last (error recovery)
+        assert WORKFLOW_NODES[-2] == "output"
+        assert WORKFLOW_NODES[-1] == "fallback"
     
     def test_theoretical_methodologies(self):
         """Test theoretical methodologies set."""

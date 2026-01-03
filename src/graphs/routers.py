@@ -27,25 +27,72 @@ THEORETICAL_METHODOLOGIES = {
     "narrative_review",
 }
 
+# Maximum number of errors before fallback
+MAX_ERRORS_BEFORE_FALLBACK = 3
+
+
+# =============================================================================
+# Fallback Check Helper
+# =============================================================================
+
+
+def _should_fallback(state: WorkflowState) -> bool:
+    """Check if workflow should route to fallback node.
+    
+    Args:
+        state: Current workflow state
+        
+    Returns:
+        True if should route to fallback
+    """
+    # Check explicit fallback flag
+    if state.get("_should_fallback"):
+        return True
+    
+    # Check error count
+    errors = state.get("errors", [])
+    if len(errors) >= MAX_ERRORS_BEFORE_FALLBACK:
+        return True
+    
+    # Check for unrecoverable errors
+    unrecoverable_count = sum(
+        1 for e in errors
+        if not getattr(e, 'recoverable', True)
+    )
+    if unrecoverable_count >= 1:
+        return True
+    
+    # Check failed status
+    if state.get("status") == ResearchStatus.FAILED:
+        return True
+    
+    return False
+
 
 # =============================================================================
 # Intake and Data Explorer Routing
 # =============================================================================
 
 
-def route_after_intake(state: WorkflowState) -> Literal["data_explorer", "literature_reviewer", "__end__"]:
+def route_after_intake(state: WorkflowState) -> Literal["data_explorer", "literature_reviewer", "fallback", "__end__"]:
     """
     Route after intake node.
     
     Routes to data_explorer if uploaded data files exist,
     otherwise directly to literature_reviewer.
+    Routes to fallback if too many errors accumulated.
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from intake due to errors")
+        return "fallback"
+    
     if state.get("errors"):
         return "__end__"
     
@@ -61,18 +108,24 @@ def route_after_intake(state: WorkflowState) -> Literal["data_explorer", "litera
     return "__end__"
 
 
-def route_after_data_explorer(state: WorkflowState) -> Literal["literature_reviewer", "__end__"]:
+def route_after_data_explorer(state: WorkflowState) -> Literal["literature_reviewer", "fallback", "__end__"]:
     """
     Route after data explorer node.
     
     Continues to literature reviewer unless there are non-recoverable errors.
+    Routes to fallback if too many errors accumulated.
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from data_explorer due to errors")
+        return "fallback"
+    
     if state.get("errors"):
         # Check if errors are recoverable (data quality issues)
         errors = state.get("errors", [])
@@ -89,19 +142,25 @@ def route_after_data_explorer(state: WorkflowState) -> Literal["literature_revie
 # =============================================================================
 
 
-def route_after_literature_reviewer(state: WorkflowState) -> Literal["literature_synthesizer", "__end__"]:
+def route_after_literature_reviewer(state: WorkflowState) -> Literal["literature_synthesizer", "fallback", "__end__"]:
     """
     Route after literature reviewer node.
     
     Continue workflow even without search results - the research can proceed
     with the data analysis path. Only stop on fatal errors.
+    Routes to fallback if too many errors accumulated.
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from literature_reviewer due to errors")
+        return "fallback"
+    
     # Check for fatal (non-recoverable) errors only
     errors = state.get("errors", [])
     fatal_errors = [e for e in errors if hasattr(e, 'recoverable') and not e.recoverable]
@@ -114,20 +173,26 @@ def route_after_literature_reviewer(state: WorkflowState) -> Literal["literature
     return "literature_synthesizer"
 
 
-def route_after_synthesizer(state: WorkflowState) -> Literal["gap_identifier", "__end__"]:
+def route_after_synthesizer(state: WorkflowState) -> Literal["gap_identifier", "fallback", "__end__"]:
     """
     Route after literature synthesizer node.
     
     Continue to gap identification even without full synthesis - the gap
     identifier can work with partial information or generate gaps from
     the research question alone.
+    Routes to fallback if too many errors accumulated.
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from synthesizer due to errors")
+        return "fallback"
+    
     # Only stop on fatal (non-recoverable) errors
     errors = state.get("errors", [])
     fatal_errors = [e for e in errors if hasattr(e, 'recoverable') and not e.recoverable]
@@ -144,16 +209,22 @@ def route_after_synthesizer(state: WorkflowState) -> Literal["gap_identifier", "
 # =============================================================================
 
 
-def route_after_gap_identifier(state: WorkflowState) -> Literal["planner", "__end__"]:
+def route_after_gap_identifier(state: WorkflowState) -> Literal["planner", "fallback", "__end__"]:
     """
     Route after gap identifier to PLANNER node.
+    Routes to fallback if too many errors accumulated.
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from gap_identifier due to errors")
+        return "fallback"
+    
     if state.get("errors"):
         return "__end__"
     
@@ -225,16 +296,22 @@ def route_by_research_type(state: WorkflowState) -> Literal["data_analyst", "con
     return "data_analyst"
 
 
-def route_after_planner(state: WorkflowState) -> Literal["data_analyst", "conceptual_synthesizer", "__end__"]:
+def route_after_planner(state: WorkflowState) -> Literal["data_analyst", "conceptual_synthesizer", "fallback", "__end__"]:
     """
     Route after planner to analysis nodes based on research type.
+    Routes to fallback if too many errors accumulated.
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from planner due to errors")
+        return "fallback"
+    
     if state.get("errors"):
         return "__end__"
     
@@ -266,7 +343,7 @@ def route_after_planner(state: WorkflowState) -> Literal["data_analyst", "concep
 # =============================================================================
 
 
-def route_after_analysis(state: WorkflowState) -> Literal["writer", "__end__"]:
+def route_after_analysis(state: WorkflowState) -> Literal["writer", "fallback", "__end__"]:
     """
     Route from analysis nodes to writer.
     
@@ -274,12 +351,19 @@ def route_after_analysis(state: WorkflowState) -> Literal["writer", "__end__"]:
     - No errors in state
     - Analysis output exists (data_analyst_output or conceptual_synthesis_output)
     
+    Routes to fallback if too many errors accumulated.
+    
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from analysis due to errors")
+        return "fallback"
+    
     if state.get("errors"):
         return "__end__"
     
@@ -293,7 +377,7 @@ def route_after_analysis(state: WorkflowState) -> Literal["writer", "__end__"]:
     return "__end__"
 
 
-def route_after_writer(state: WorkflowState) -> Literal["reviewer", "__end__"]:
+def route_after_writer(state: WorkflowState) -> Literal["reviewer", "fallback", "__end__"]:
     """
     Route from writer to reviewer.
     
@@ -301,12 +385,19 @@ def route_after_writer(state: WorkflowState) -> Literal["reviewer", "__end__"]:
     - No errors in state
     - Writer output exists
     
+    Routes to fallback if too many errors accumulated.
+    
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from writer due to errors")
+        return "fallback"
+    
     if state.get("errors"):
         return "__end__"
     
@@ -322,21 +413,27 @@ def route_after_writer(state: WorkflowState) -> Literal["reviewer", "__end__"]:
 # =============================================================================
 
 
-def route_after_reviewer(state: WorkflowState) -> Literal["writer", "output", "__end__"]:
+def route_after_reviewer(state: WorkflowState) -> Literal["writer", "output", "fallback", "__end__"]:
     """
     Route after reviewer based on review decision.
     
     Routes to:
     - "output" if approved by human or escalated
     - "writer" if revision needed (loops back)
+    - "fallback" if too many errors accumulated
     - "__end__" if rejected or error
     
     Args:
         state: Current workflow state
         
     Returns:
-        Next node name or "__end__"
+        Next node name, "fallback", or "__end__"
     """
+    # Check for fallback condition
+    if _should_fallback(state):
+        logger.warning("Routing to fallback from reviewer due to errors")
+        return "fallback"
+    
     decision = state.get("review_decision")
     human_approved = state.get("human_approved", False)
     
