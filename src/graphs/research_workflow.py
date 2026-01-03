@@ -37,7 +37,7 @@ from src.graphs.routers import (
     route_after_writer,
     route_after_reviewer,
 )
-from src.nodes.fallback import fallback_node, should_fallback
+from src.nodes.fallback import fallback_node
 from src.cache import get_cache, get_cache_policy
 from src.config import settings
 
@@ -357,7 +357,6 @@ def create_research_workflow(
     
     # Fallback -> END (Sprint 9)
     workflow.add_edge("fallback", END)
-    workflow.add_edge("output", END)
     
     # ==========================================================================
     # Compile with configuration

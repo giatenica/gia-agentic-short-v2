@@ -6,6 +6,7 @@ and retry conditions.
 """
 
 import logging
+import random
 from dataclasses import dataclass, field
 from typing import Callable, Type
 
@@ -63,8 +64,6 @@ class RetryPolicy:
         Returns:
             Delay in seconds before next retry
         """
-        import random
-        
         delay = min(
             self.initial_interval * (self.backoff_factor ** attempt),
             self.max_interval

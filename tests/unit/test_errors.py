@@ -8,8 +8,7 @@ This module tests:
 - Fallback node
 """
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -46,7 +45,6 @@ from src.errors import (
     RecoveryStrategy,
     RecoveryAction,
     determine_recovery_strategy,
-    execute_recovery,
     can_continue_workflow,
     get_partial_output,
     create_fallback_content,
@@ -425,7 +423,9 @@ class TestErrorHandler:
         """Test ErrorHandler.should_fail triggers on max errors."""
         handler = ErrorHandler(node="test", max_errors=3)
         error = GIAError("Test error")
-        # State with 2 existing errors - adding one more reaches max
+        # Call handle() first to increment _error_count
+        handler.handle(error, state={})
+        # Now state with 2 errors + _error_count(1) = 3 (max)
         state = {"errors": [MagicMock(), MagicMock()]}
         assert handler.should_fail(error, state) is True
     
@@ -730,7 +730,7 @@ class TestErrorHandlingIntegration:
         
         # Verify strategy is valid
         assert isinstance(strategy, RecoveryStrategy)
-        assert strategy.action in RecoveryAction
+        assert isinstance(strategy.action, RecoveryAction)
     
     def test_multiple_errors_trigger_fallback(self):
         """Test multiple errors eventually trigger fallback."""

@@ -401,7 +401,6 @@ def create_fallback_content(
         Fallback content string
     """
     # Get project context
-    title = state.get("project_title", "Research Project")
     question = state.get("refined_query") or state.get("original_query", "")
     
     # Section-specific fallbacks

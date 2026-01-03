@@ -416,8 +416,8 @@ class ErrorHandler:
                 logger.warning(f"Unrecoverable error in {self.node}")
                 return True
         
-        # Check error count
-        total_errors = len(state.get("errors", [])) + 1
+        # Check error count (use instance count + state errors)
+        total_errors = self._error_count + len(state.get("errors", []))
         if total_errors >= self.max_errors:
             logger.warning(
                 f"Max errors ({self.max_errors}) reached in {self.node}"
