@@ -50,7 +50,7 @@ from src.tools.llm_interpretation import (
     interpret_hypothesis_test,
     summarize_findings,
 )
-from src.tools.data_loading import list_datasets, query_data, get_registry
+from src.tools.data_loading import get_registry
 
 import logging
 

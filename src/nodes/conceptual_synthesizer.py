@@ -138,11 +138,16 @@ def _extract_concepts_from_synthesis(
             # Try to cut at a reasonable point
             for sep in [":", ".", ",", " - "]:
                 if sep in name[:95]:
-                    name = name[:name.index(sep)]
+                    idx = name[:95].index(sep)
+                    name = name[:idx]
                     break
             else:
                 name = name[:95]
-        return name.strip() if len(name) >= 2 else fallback
+        # Fallback if too short or contains no alphanumeric characters
+        cleaned = name.strip()
+        if len(cleaned) < 2 or not any(ch.isalnum() for ch in cleaned):
+            return fallback
+        return cleaned
     
     # Extract from theoretical frameworks
     frameworks = synthesis.get("theoretical_frameworks", [])
