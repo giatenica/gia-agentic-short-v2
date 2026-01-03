@@ -3,9 +3,8 @@
 Provides mock LLM, workflow fixtures, and test data for integration testing.
 """
 
-from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,7 +14,6 @@ from src.state.enums import (
     PaperType,
     TargetJournal,
 )
-from src.state.schema import WorkflowState
 
 
 # =============================================================================

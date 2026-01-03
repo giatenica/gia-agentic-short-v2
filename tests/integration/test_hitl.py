@@ -1,10 +1,5 @@
 """Tests for Human-in-the-Loop (HITL) functionality."""
 
-from unittest.mock import MagicMock, patch
-import pytest
-
-from src.state.enums import ResearchStatus
-
 
 # =============================================================================
 # Interrupt Tests

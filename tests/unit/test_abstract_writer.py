@@ -1,7 +1,7 @@
 """Tests for abstract writer."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.writers.abstract import AbstractWriter
 from src.writers.base import SectionWriterConfig

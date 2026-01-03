@@ -1,7 +1,5 @@
 """Tests for citation formatter."""
 
-import pytest
-
 from src.citations.formatter import (
     Author,
     format_inline_citation,

@@ -3,10 +3,9 @@
 Tests the full research workflow from intake to output with mock LLM.
 """
 
-from unittest.mock import MagicMock, patch, AsyncMock
-import pytest
+from unittest.mock import MagicMock
 
-from src.state.enums import ResearchStatus, ResearchType
+from src.state.enums import ResearchStatus
 from src.graphs import create_research_workflow, WorkflowConfig
 from src.nodes.fallback import fallback_node, should_fallback
 

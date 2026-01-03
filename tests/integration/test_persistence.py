@@ -1,11 +1,8 @@
 """Tests for workflow persistence and resume functionality."""
 
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 from langgraph.checkpoint.memory import MemorySaver
-
-from src.state.enums import ResearchStatus
 from src.graphs import create_research_workflow, WorkflowConfig
 
 

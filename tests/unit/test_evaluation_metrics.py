@@ -1,7 +1,6 @@
 """Tests for evaluation metrics module."""
 
 import pytest
-from datetime import datetime, timezone
 
 from evaluation.metrics import (
     MetricType,
