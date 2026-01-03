@@ -72,6 +72,7 @@ NODE_PROGRESS_MESSAGES = {
     "writer": "Writing paper sections...",
     "reviewer": "Reviewing paper quality...",
     "output": "Preparing final output...",
+    "fallback": "Generating partial output (error recovery)...",
 }
 
 

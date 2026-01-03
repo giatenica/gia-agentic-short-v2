@@ -14,6 +14,7 @@ from src.graphs.research_workflow import (
     WorkflowConfig,
     INTERRUPT_BEFORE_NODES,
     INTERRUPT_AFTER_NODES,
+    WORKFLOW_NODES,
 )
 from src.graphs.streaming import (
     stream_research_workflow,
@@ -51,6 +52,7 @@ __all__ = [
     "WorkflowConfig",
     "INTERRUPT_BEFORE_NODES",
     "INTERRUPT_AFTER_NODES",
+    "WORKFLOW_NODES",
     # Streaming
     "stream_research_workflow",
     "StreamEvent",

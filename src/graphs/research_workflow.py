@@ -37,6 +37,7 @@ from src.graphs.routers import (
     route_after_writer,
     route_after_reviewer,
 )
+from src.nodes.fallback import fallback_node
 from src.cache import get_cache, get_cache_policy
 from src.config import settings
 
@@ -66,6 +67,7 @@ WORKFLOW_NODES = [
     "writer",
     "reviewer",
     "output",
+    "fallback",  # Error recovery node
 ]
 
 
@@ -270,6 +272,9 @@ def create_research_workflow(
     # Sprint 7: Output (no caching - final node)
     workflow.add_node("output", output_node)
     
+    # Sprint 9: Fallback node for graceful degradation (no caching)
+    workflow.add_node("fallback", fallback_node)
+    
     # ==========================================================================
     # Add edges
     # ==========================================================================
@@ -277,78 +282,81 @@ def create_research_workflow(
     # Start -> Intake
     workflow.add_edge(START, "intake")
     
-    # Intake -> Data Explorer (if data) or Literature Reviewer
+    # Intake -> Data Explorer (if data) or Literature Reviewer or Fallback
     workflow.add_conditional_edges(
         "intake",
         route_after_intake,
-        ["data_explorer", "literature_reviewer", END]
+        ["data_explorer", "literature_reviewer", "fallback", END]
     )
     
-    # Data Explorer -> Literature Reviewer
+    # Data Explorer -> Literature Reviewer or Fallback
     workflow.add_conditional_edges(
         "data_explorer",
         route_after_data_explorer,
-        ["literature_reviewer", END]
+        ["literature_reviewer", "fallback", END]
     )
     
-    # Literature Reviewer -> Literature Synthesizer
+    # Literature Reviewer -> Literature Synthesizer or Fallback
     workflow.add_conditional_edges(
         "literature_reviewer",
         route_after_literature_reviewer,
-        ["literature_synthesizer", END]
+        ["literature_synthesizer", "fallback", END]
     )
     
-    # Literature Synthesizer -> Gap Identifier
+    # Literature Synthesizer -> Gap Identifier or Fallback
     workflow.add_conditional_edges(
         "literature_synthesizer",
         route_after_synthesizer,
-        ["gap_identifier", END]
+        ["gap_identifier", "fallback", END]
     )
     
-    # Gap Identifier -> Planner
+    # Gap Identifier -> Planner or Fallback
     workflow.add_conditional_edges(
         "gap_identifier",
         route_after_gap_identifier,
-        ["planner", END]
+        ["planner", "fallback", END]
     )
     
-    # Planner -> Data Analyst or Conceptual Synthesizer (Sprint 5)
+    # Planner -> Data Analyst or Conceptual Synthesizer or Fallback (Sprint 5)
     workflow.add_conditional_edges(
         "planner",
         route_after_planner,
-        ["data_analyst", "conceptual_synthesizer", END]
+        ["data_analyst", "conceptual_synthesizer", "fallback", END]
     )
     
-    # Data Analyst -> Writer (Sprint 6)
+    # Data Analyst -> Writer or Fallback (Sprint 6)
     workflow.add_conditional_edges(
         "data_analyst",
         route_after_analysis,
-        ["writer", END]
+        ["writer", "fallback", END]
     )
     
-    # Conceptual Synthesizer -> Writer (Sprint 6)
+    # Conceptual Synthesizer -> Writer or Fallback (Sprint 6)
     workflow.add_conditional_edges(
         "conceptual_synthesizer",
         route_after_analysis,
-        ["writer", END]
+        ["writer", "fallback", END]
     )
     
-    # Writer -> Reviewer (Sprint 7)
+    # Writer -> Reviewer or Fallback (Sprint 7)
     workflow.add_conditional_edges(
         "writer",
         route_after_writer,
-        ["reviewer", END]
+        ["reviewer", "fallback", END]
     )
     
-    # Reviewer -> Writer (revision) or Output (approval) (Sprint 7)
+    # Reviewer -> Writer (revision) or Output (approval) or Fallback (Sprint 7)
     workflow.add_conditional_edges(
         "reviewer",
         route_after_reviewer,
-        ["writer", "output", END]
+        ["writer", "output", "fallback", END]
     )
     
     # Output -> END
     workflow.add_edge("output", END)
+    
+    # Fallback -> END (Sprint 9)
+    workflow.add_edge("fallback", END)
     
     # ==========================================================================
     # Compile with configuration

@@ -53,6 +53,11 @@ from src.nodes.reviewer import (
     reviewer_node,
     route_after_reviewer,
 )
+from src.nodes.fallback import (
+    fallback_node,
+    should_fallback,
+    route_to_fallback_or_continue,
+)
 
 __all__ = [
     # Intake node
@@ -104,4 +109,8 @@ __all__ = [
     # Reviewer node (Sprint 7)
     "reviewer_node",
     "route_after_reviewer",
+    # Fallback node (Sprint 9)
+    "fallback_node",
+    "should_fallback",
+    "route_to_fallback_or_continue",
 ]
