@@ -10,6 +10,7 @@ Supported databases:
 - Tavily: Broad academic coverage via web search
 """
 
+import time
 import xml.etree.ElementTree as ET
 
 import httpx
@@ -19,6 +20,56 @@ from typing import Any
 from langchain_core.tools import tool
 
 from src.state.models import SearchResult
+
+
+# =============================================================================
+# Rate Limit Configuration
+# =============================================================================
+
+MAX_RETRIES = 3
+INITIAL_BACKOFF = 1.0  # seconds
+BACKOFF_MULTIPLIER = 2.0
+
+
+def _make_request_with_retry(
+    client: httpx.Client,
+    url: str,
+    params: dict[str, Any],
+    max_retries: int = MAX_RETRIES,
+) -> httpx.Response:
+    """Make HTTP request with exponential backoff retry for rate limits."""
+    backoff = INITIAL_BACKOFF
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.get(url, params=params)
+            # If we get a 429, wait and retry
+            if response.status_code == 429:
+                if attempt < max_retries:
+                    time.sleep(backoff)
+                    backoff *= BACKOFF_MULTIPLIER
+                    continue
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429 and attempt < max_retries:
+                time.sleep(backoff)
+                backoff *= BACKOFF_MULTIPLIER
+                last_exception = e
+                continue
+            raise
+        except httpx.RequestError as e:
+            last_exception = e
+            if attempt < max_retries:
+                time.sleep(backoff)
+                backoff *= BACKOFF_MULTIPLIER
+                continue
+            raise
+    
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("Request failed after retries")
 
 
 # =============================================================================
@@ -80,13 +131,13 @@ def semantic_scholar_search(
         if fields_of_study:
             params["fieldsOfStudy"] = ",".join(fields_of_study)
         
-        # Make API request
+        # Make API request with retry for rate limits
         with httpx.Client(timeout=30.0) as client:
-            response = client.get(
+            response = _make_request_with_retry(
+                client,
                 f"{SEMANTIC_SCHOLAR_API}/paper/search",
-                params=params,
+                params,
             )
-            response.raise_for_status()
             data = response.json()
         
         # Parse results
@@ -162,7 +213,7 @@ def semantic_scholar_search(
 # arXiv Search
 # =============================================================================
 
-ARXIV_API = "http://export.arxiv.org/api/query"
+ARXIV_API = "https://export.arxiv.org/api/query"
 
 
 @tool
@@ -215,8 +266,8 @@ def arxiv_search(
             "sortOrder": "descending",
         }
         
-        # Make API request
-        with httpx.Client(timeout=30.0) as client:
+        # Make API request (follow redirects for arXiv)
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
             response = client.get(ARXIV_API, params=params)
             response.raise_for_status()
         

@@ -19,7 +19,19 @@ from src.state.enums import PaperType, ResearchType, TargetJournal
 from src.nodes import intake_node
 
 app = Flask(__name__, static_folder="../public")
-CORS(app)
+
+# CORS configuration - restrict to local development origins
+# For production, update these to your actual domains
+CORS(app, origins=[
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:2024",
+    "http://127.0.0.1:2024",
+])
+
+# Security limits
+MAX_ZIP_SIZE = 500 * 1024 * 1024  # 500 MB max extracted size
+MAX_ZIP_FILES = 100  # Max files in a ZIP
 
 # Directory for uploaded data files
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "gia_uploads"
@@ -58,6 +70,49 @@ TARGET_JOURNAL_MAP = {
 }
 
 
+def safe_extract_zip(zip_path: Path, extract_dir: Path) -> list[Path]:
+    """
+    Safely extract ZIP file with protection against zip bombs and path traversal.
+    
+    Args:
+        zip_path: Path to the ZIP file
+        extract_dir: Directory to extract to
+        
+    Returns:
+        List of extracted file paths
+        
+    Raises:
+        ValueError: If ZIP is malicious (zip bomb, path traversal, etc.)
+    """
+    extracted_files = []
+    total_size = 0
+    
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        # Check number of files
+        if len(zf.namelist()) > MAX_ZIP_FILES:
+            raise ValueError(f"ZIP contains too many files (max {MAX_ZIP_FILES})")
+        
+        for info in zf.infolist():
+            # Check for path traversal
+            target_path = extract_dir / info.filename
+            try:
+                target_path.resolve().relative_to(extract_dir.resolve())
+            except ValueError:
+                raise ValueError(f"ZIP contains path traversal attempt: {info.filename}")
+            
+            # Check for zip bomb (cumulative size)
+            total_size += info.file_size
+            if total_size > MAX_ZIP_SIZE:
+                raise ValueError(f"ZIP extraction would exceed size limit ({MAX_ZIP_SIZE / 1024 / 1024:.0f} MB)")
+            
+            # Extract single file
+            zf.extract(info, extract_dir)
+            if not info.is_dir():
+                extracted_files.append(target_path)
+    
+    return extracted_files
+
+
 @app.route("/")
 def index():
     """Serve the intake form."""
@@ -85,12 +140,19 @@ def submit_intake():
                 file_path = project_folder / file.filename
                 file.save(str(file_path))
                 
-                # If it's a zip, extract it
+                # If it's a zip, extract it safely
                 if file.filename.endswith(".zip"):
                     extract_dir = project_folder / file.filename.replace(".zip", "")
                     extract_dir.mkdir(exist_ok=True)
-                    with zipfile.ZipFile(file_path, "r") as zip_ref:
-                        zip_ref.extractall(extract_dir)
+                    
+                    # Use safe extraction with zip bomb protection
+                    try:
+                        safe_extract_zip(file_path, extract_dir)
+                    except ValueError as e:
+                        return jsonify({
+                            "success": False,
+                            "error": f"ZIP extraction failed: {str(e)}",
+                        }), 400
                     
                     # Find parquet files in the extracted content
                     for parquet_file in extract_dir.rglob("*.parquet"):

@@ -1,6 +1,19 @@
-# GIA Agentic Systems
+# GIA Agentic Research System
 
-LangGraph-based agentic systems using **Anthropic Claude** with LangSmith observability.
+LangGraph-based autonomous research system using **Anthropic Claude** for academic research automation. Features a multi-node workflow that takes a research question through literature review, gap analysis, methodology planning, data analysis, and paper writing.
+
+## Overview
+
+GIA (Gia Tenica) is an AI-powered research assistant that automates the academic research workflow:
+
+1. **Intake** - Parse research question, validate inputs, process uploaded data files
+2. **Data Exploration** - Analyze datasets with DuckDB backend (handles 46M+ rows)
+3. **Literature Review** - Search Semantic Scholar, arXiv, and Tavily for papers
+4. **Literature Synthesis** - Extract themes, identify gaps, generate contributions
+5. **Gap Identification** - Analyze literature gaps with human approval checkpoints
+6. **Research Planning** - Design methodology with human approval
+7. **Data Analysis** - Execute statistical analysis using 35+ tools
+8. **Paper Writing** - Generate academic sections with style enforcement
 
 ## Quick Start
 
@@ -10,8 +23,8 @@ LangGraph-based agentic systems using **Anthropic Claude** with LangSmith observ
 # Using uv (recommended)
 uv sync
 
-# Or with pip
-pip install -e .
+# Install with dev dependencies
+uv sync --all-extras
 ```
 
 ### 2. Configure Environment
@@ -27,83 +40,166 @@ Required keys:
 - `LANGSMITH_API_KEY` - Get from [LangSmith](https://smith.langchain.com/)
 - `TAVILY_API_KEY` - Get from [Tavily](https://tavily.com/)
 
-### 3. Run the Agent
-
-```bash
-# Interactive CLI
-uv run python -m src.main
-
-# Or directly
-uv run python src/main.py
-```
-
-## LangGraph Studio
-
-Visualize and debug agents with LangGraph Studio:
+### 3. Run with LangGraph Studio
 
 ```bash
 cd studio
-langgraph dev
+uv run langgraph dev
 ```
 
-Then open: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+Open: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+
+### 4. Run CLI
+
+```bash
+uv run python -m src.main
+```
 
 ## Project Structure
 
 ```
 gia-agentic-short-v2/
 ├── src/
-│   ├── agents/           # Agent implementations
-│   │   ├── base.py       # ReAct agent with LangGraph
-│   │   └── research.py   # Research-focused agent
-│   ├── nodes/            # LangGraph nodes
-│   │   ├── intake.py     # INTAKE node for processing submissions
-│   │   └── data_explorer.py  # DATA_EXPLORER node for data analysis
-│   ├── state/            # State management
-│   │   ├── enums.py      # Status and type enumerations
-│   │   ├── models.py     # Pydantic data models
-│   │   └── schema.py     # WorkflowState TypedDict
-│   ├── tools/            # Tool definitions
-│   │   ├── search.py     # Tavily web search
-│   │   ├── basic.py      # Utility tools
-│   │   └── data_exploration.py  # Data analysis tools
-│   ├── config/           # Configuration
-│   │   └── settings.py   # Environment settings
-│   └── main.py           # CLI entrypoint
-├── studio/               # LangGraph Studio config
-│   ├── langgraph.json
-│   └── graphs.py
-├── tests/                # Test suite
-│   └── unit/             # Unit tests
-├── pyproject.toml        # Dependencies
-└── .env                  # API keys (not in git)
+│   ├── agents/              # Agent implementations
+│   │   ├── base.py          # ReAct agent with tools
+│   │   ├── research.py      # Research-focused agent
+│   │   └── data_analyst.py  # Data analysis agent
+│   ├── nodes/               # LangGraph workflow nodes
+│   │   ├── intake.py        # Research intake processing
+│   │   ├── data_explorer.py # Dataset analysis (DuckDB)
+│   │   ├── literature_reviewer.py    # Academic search
+│   │   ├── literature_synthesizer.py # Theme extraction
+│   │   ├── gap_identifier.py         # Gap analysis
+│   │   ├── planner.py                # Methodology planning
+│   │   ├── data_analyst.py           # Statistical analysis
+│   │   ├── conceptual_synthesizer.py # Theoretical research
+│   │   └── writer.py                 # Paper composition
+│   ├── tools/               # 17 tool modules with 35+ tools
+│   │   ├── academic_search.py    # Semantic Scholar, arXiv, Tavily
+│   │   ├── citation_analysis.py  # Citation metrics
+│   │   ├── data_loading.py       # Load CSV, Parquet, Excel, etc.
+│   │   ├── data_profiling.py     # Column statistics, distributions
+│   │   ├── data_transformation.py # Filter, join, aggregate
+│   │   ├── data_analysis.py      # Regression, correlation
+│   │   ├── data_interpretation.py # Insights, recommendations
+│   │   ├── gap_analysis.py       # Literature gap detection
+│   │   ├── methodology.py        # Research design
+│   │   ├── contribution.py       # Contribution framing
+│   │   └── ...
+│   ├── state/               # State management
+│   │   ├── schema.py        # WorkflowState TypedDict
+│   │   ├── models.py        # 50+ Pydantic models
+│   │   └── enums.py         # Research status enums
+│   ├── cache/               # SQLite-based LLM response caching
+│   ├── citations/           # Citation management (APA style)
+│   ├── style/               # Academic writing style enforcement
+│   │   ├── banned_words.py  # Flagged words list
+│   │   ├── academic_tone.py # Tone analysis
+│   │   └── enforcer.py      # Auto-fix violations
+│   ├── writers/             # Section-specific writers
+│   │   ├── introduction.py
+│   │   ├── literature_review.py
+│   │   ├── methods.py
+│   │   ├── results.py
+│   │   ├── discussion.py
+│   │   └── conclusion.py
+│   ├── memory/              # Checkpointer and store
+│   ├── config/              # Settings from environment
+│   └── server.py            # Flask intake form server
+├── studio/
+│   ├── graphs.py            # LangGraph workflow definition
+│   └── langgraph.json       # Studio configuration
+├── tests/
+│   └── unit/                # 281 unit tests
+├── public/
+│   └── research_intake_form.html
+├── docs/                    # Sprint documentation
+└── pyproject.toml
 ```
 
-## Available Agents
+## Workflow Architecture
 
-### ReAct Agent
-General-purpose agent with reasoning and tool use:
-- Web search (Tavily)
-- Calculator
-- Current time
+```
+INTAKE → DATA_EXPLORER → LITERATURE_REVIEWER → LITERATURE_SYNTHESIZER
+    ↓
+GAP_IDENTIFIER (human approval) → PLANNER (human approval)
+    ↓
+    ├── DATA_ANALYST (empirical research)
+    │       ↓
+    └── CONCEPTUAL_SYNTHESIZER (theoretical)
+            ↓
+        WRITER → END
+```
 
-### Research Agent  
-Specialized for information gathering:
-- Enhanced web search
-- Source citation
-- Structured responses
+### Node Descriptions
 
-## Development
+| Node | Purpose |
+|------|---------|
+| `intake` | Parse form data, validate research question, process uploads |
+| `data_explorer` | Parallel loading of datasets, schema detection, quality assessment |
+| `literature_reviewer` | Generate search queries, execute multi-source academic search |
+| `literature_synthesizer` | Extract themes, synthesize findings, identify gaps |
+| `gap_identifier` | Analyze gaps, generate refined question (with interrupt) |
+| `planner` | Design methodology, assess feasibility (with interrupt) |
+| `data_analyst` | Execute regressions, correlations, hypothesis tests |
+| `conceptual_synthesizer` | Build theoretical frameworks |
+| `writer` | Generate paper sections with style enforcement |
+
+## Data Analysis Tools
+
+The system includes 35+ tools organized into categories:
+
+### Loading & Registry
+- `load_data` - CSV, Excel, Parquet, Stata, SPSS, JSON, ZIP
+- `list_datasets` - View registered datasets
+- `query_data` - SQL queries via DuckDB
+
+### Profiling
+- `describe_column` - Column statistics
+- `compute_distributions` - Histograms, frequency tables
+- `detect_outliers` - IQR/Z-score methods
+
+### Transformation
+- `filter_data` - Row filtering with expressions
+- `create_variable` - Computed columns (safe eval)
+- `merge_datasets` - Join operations
+- `aggregate_data` - Group-by summaries
+
+### Analysis
+- `run_regression` - OLS with diagnostics
+- `compute_correlation` - Correlation matrices
+- `run_hypothesis_test` - t-test, chi-squared, etc.
+
+### Interpretation
+- `interpret_regression` - Plain-English explanations
+- `generate_insights` - Key finding summaries
+- `suggest_analyses` - Next-step recommendations
+
+## Caching System
+
+LLM responses are cached in SQLite to speed up development:
 
 ```bash
-# Install with dev dependencies
-uv sync --all-extras
+# Enable/disable caching
+export CACHE_ENABLED=true  # default
 
-# Run tests
-uv run pytest
+# Configure TTLs (seconds)
+export CACHE_TTL_LITERATURE=3600   # 1 hour
+export CACHE_TTL_SYNTHESIS=1800    # 30 minutes
+export CACHE_TTL_WRITER=600        # 10 minutes
+```
 
-# Format code
-uv run ruff format .
+## Testing
+
+```bash
+# Run all 281 tests
+uv run pytest tests/ -v
+
+# Run specific test file
+uv run pytest tests/unit/test_data_explorer.py -v
+
+# Run with coverage
+uv run pytest --cov=src tests/
 ```
 
 ## Environment Variables
@@ -114,4 +210,45 @@ uv run ruff format .
 | `LANGSMITH_API_KEY` | LangSmith API key for tracing | ✅ |
 | `TAVILY_API_KEY` | Tavily API key for web search | ✅ |
 | `LANGSMITH_TRACING` | Enable tracing (default: true) | ❌ |
+| `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |
+| `CACHE_ENABLED` | Enable LLM response caching | ❌ |
+| `CACHE_PATH` | SQLite cache location | ❌ |
+
+## Model Configuration
+
+| Task Type | Model | Use Case |
+|-----------|-------|----------|
+| Complex Reasoning | `claude-opus-4-5-20251101` | Research, analysis |
+| General/Coding | `claude-sonnet-4-5-20250929` | Default for most tasks |
+| High-Volume | `claude-haiku-4-5-20251001` | Classification, extraction |
+
+## Development
+
+```bash
+# Install dev dependencies
+uv sync --all-extras
+
+# Run tests
+uv run pytest
+
+# Format code
+uv run ruff format .
+
+# Lint
+uv run ruff check .
+```
+
+## Security
+
+- API keys loaded from environment variables (never hardcoded)
+- ZIP extraction protected against zip bombs and path traversal
+- Safe expression evaluation (no `eval()` on user input)
+- CORS restricted to localhost in development
+
+## Author
+
+**Gia Tenica** (me@giatenica.com)
+
+Gia Tenica is an anagram for Agentic AI. Gia is a fully autonomous AI researcher.
+For more information: https://giatenica.com
 | `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |

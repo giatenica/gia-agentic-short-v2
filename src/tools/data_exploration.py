@@ -580,11 +580,264 @@ def generate_recommendations(issues: list[dict]) -> list[str]:
     return recommendations
 
 
+def _analyze_zip_file(data_file: DataFile, filepath: str) -> DataExplorationResult:
+    """
+    Extract and analyze contents of a ZIP file.
+    
+    Extracts to a temporary directory, finds all analyzable data files,
+    analyzes each, and aggregates the results.
+    
+    Args:
+        data_file: Original DataFile object for the ZIP.
+        filepath: Path to the ZIP file.
+        
+    Returns:
+        Aggregated DataExplorationResult from all contained files.
+    """
+    import zipfile
+    import tempfile
+    import shutil
+    from src.state.enums import CritiqueSeverity
+    
+    # Security limits for ZIP extraction
+    MAX_ZIP_SIZE = 500 * 1024 * 1024  # 500 MB max extracted size
+    MAX_ZIP_FILES = 100  # Max files in a ZIP
+    
+    # Supported data file extensions
+    DATA_EXTENSIONS = {".csv", ".xlsx", ".xls", ".parquet", ".json"}
+    
+    if not zipfile.is_zipfile(filepath):
+        return DataExplorationResult(
+            files_analyzed=[data_file],
+            total_rows=0,
+            total_columns=0,
+            columns=[],
+            quality_score=0.0,
+            quality_level=DataQualityLevel.NOT_ASSESSED,
+            quality_issues=[QualityIssue(
+                severity=CritiqueSeverity.CRITICAL,
+                category="invalid_format",
+                description="File is not a valid ZIP archive",
+            )],
+            feasibility_assessment="Invalid ZIP file",
+        )
+    
+    # Create temp directory for extraction
+    temp_dir = tempfile.mkdtemp(prefix="gia_data_")
+    extracted_path = Path(temp_dir)
+    
+    try:
+        # Safely extract ZIP contents with protection against zip bombs and path traversal
+        total_size = 0
+        with zipfile.ZipFile(filepath, 'r') as zf:
+            # Check number of files
+            if len(zf.namelist()) > MAX_ZIP_FILES:
+                return DataExplorationResult(
+                    files_analyzed=[data_file],
+                    total_rows=0,
+                    total_columns=0,
+                    columns=[],
+                    quality_score=0.0,
+                    quality_level=DataQualityLevel.NOT_ASSESSED,
+                    quality_issues=[QualityIssue(
+                        severity=CritiqueSeverity.CRITICAL,
+                        category="security",
+                        description=f"ZIP contains too many files (max {MAX_ZIP_FILES})",
+                    )],
+                    feasibility_assessment="ZIP file contains too many files",
+                )
+            
+            for info in zf.infolist():
+                # Check for path traversal
+                target_path = extracted_path / info.filename
+                try:
+                    target_path.resolve().relative_to(extracted_path.resolve())
+                except ValueError:
+                    return DataExplorationResult(
+                        files_analyzed=[data_file],
+                        total_rows=0,
+                        total_columns=0,
+                        columns=[],
+                        quality_score=0.0,
+                        quality_level=DataQualityLevel.NOT_ASSESSED,
+                        quality_issues=[QualityIssue(
+                            severity=CritiqueSeverity.CRITICAL,
+                            category="security",
+                            description="ZIP contains path traversal attempt",
+                        )],
+                        feasibility_assessment="Malicious ZIP file detected",
+                    )
+                
+                # Check for zip bomb (cumulative size)
+                total_size += info.file_size
+                if total_size > MAX_ZIP_SIZE:
+                    return DataExplorationResult(
+                        files_analyzed=[data_file],
+                        total_rows=0,
+                        total_columns=0,
+                        columns=[],
+                        quality_score=0.0,
+                        quality_level=DataQualityLevel.NOT_ASSESSED,
+                        quality_issues=[QualityIssue(
+                            severity=CritiqueSeverity.CRITICAL,
+                            category="security",
+                            description=f"ZIP extraction would exceed size limit ({MAX_ZIP_SIZE / 1024 / 1024:.0f} MB)",
+                        )],
+                        feasibility_assessment="ZIP file is too large to extract safely",
+                    )
+                
+                # Extract single file
+                zf.extract(info, temp_dir)
+        
+        # Find all data files in the extracted contents
+        data_files_found: list[Path] = []
+        
+        for ext in DATA_EXTENSIONS:
+            data_files_found.extend(extracted_path.rglob(f"*{ext}"))
+        
+        if not data_files_found:
+            return DataExplorationResult(
+                files_analyzed=[data_file],
+                total_rows=0,
+                total_columns=0,
+                columns=[],
+                quality_score=0.0,
+                quality_level=DataQualityLevel.NOT_ASSESSED,
+                quality_issues=[QualityIssue(
+                    severity=CritiqueSeverity.MAJOR,
+                    category="no_data",
+                    description=f"ZIP contains no analyzable data files. Supported formats: {', '.join(DATA_EXTENSIONS)}",
+                )],
+                feasibility_assessment=f"No data files found in ZIP. Archive may contain other file types.",
+            )
+        
+        # Analyze each file and aggregate results
+        all_results: list[DataExplorationResult] = []
+        all_files_analyzed: list[DataFile] = [data_file]  # Include the original ZIP
+        all_columns: list[ColumnAnalysis] = []
+        all_quality_issues: list[QualityIssue] = []
+        total_rows = 0
+        total_columns = 0
+        quality_scores: list[float] = []
+        
+        for file_path in data_files_found:
+            # Create DataFile for the extracted file
+            content_type_map = {
+                ".csv": "text/csv",
+                ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".xls": "application/vnd.ms-excel",
+                ".parquet": "application/octet-stream",
+                ".json": "application/json",
+            }
+            
+            extracted_file = DataFile(
+                filename=file_path.name,
+                filepath=file_path,
+                content_type=content_type_map.get(file_path.suffix.lower(), "application/octet-stream"),
+                size_bytes=file_path.stat().st_size,
+            )
+            
+            # Recursively analyze (but this won't hit ZIP handling again for normal files)
+            result = analyze_file(extracted_file)
+            
+            if result.total_rows > 0:
+                all_results.append(result)
+                all_files_analyzed.extend(result.files_analyzed)
+                all_columns.extend(result.columns)
+                all_quality_issues.extend(result.quality_issues)
+                total_rows += result.total_rows
+                total_columns += result.total_columns
+                if result.quality_score > 0:
+                    quality_scores.append(result.quality_score)
+        
+        # Aggregate quality score (weighted average by row count)
+        if quality_scores:
+            avg_quality = sum(quality_scores) / len(quality_scores)
+        else:
+            avg_quality = 0.0
+        
+        # Determine overall quality level
+        if avg_quality >= 0.8:
+            quality_level = DataQualityLevel.EXCELLENT
+        elif avg_quality >= 0.6:
+            quality_level = DataQualityLevel.GOOD
+        elif avg_quality >= 0.4:
+            quality_level = DataQualityLevel.ACCEPTABLE
+        elif avg_quality > 0:
+            quality_level = DataQualityLevel.POOR
+        else:
+            quality_level = DataQualityLevel.NOT_ASSESSED
+        
+        # Build feasibility assessment
+        file_count = len(data_files_found)
+        analyzed_count = len(all_results)
+        
+        if analyzed_count == 0:
+            feasibility = "No files could be analyzed from the ZIP archive"
+        elif avg_quality >= 0.4:
+            feasibility = (
+                f"Successfully analyzed {analyzed_count} of {file_count} data files. "
+                f"Total: {total_rows:,} rows across {total_columns} columns. "
+                f"Data appears suitable for analysis."
+            )
+        else:
+            feasibility = (
+                f"Analyzed {analyzed_count} files but overall quality is low ({avg_quality:.0%}). "
+                f"Review quality issues before proceeding."
+            )
+        
+        return DataExplorationResult(
+            files_analyzed=all_files_analyzed,
+            total_rows=total_rows,
+            total_columns=total_columns,
+            columns=all_columns,
+            quality_score=avg_quality,
+            quality_level=quality_level,
+            quality_issues=all_quality_issues,
+            feasibility_assessment=feasibility,
+        )
+        
+    except zipfile.BadZipFile as e:
+        return DataExplorationResult(
+            files_analyzed=[data_file],
+            total_rows=0,
+            total_columns=0,
+            columns=[],
+            quality_score=0.0,
+            quality_level=DataQualityLevel.NOT_ASSESSED,
+            quality_issues=[QualityIssue(
+                severity=CritiqueSeverity.CRITICAL,
+                category="corrupt_archive",
+                description=f"ZIP file is corrupted: {str(e)}",
+            )],
+            feasibility_assessment="Cannot extract ZIP file; archive may be corrupted",
+        )
+    except Exception as e:
+        return DataExplorationResult(
+            files_analyzed=[data_file],
+            total_rows=0,
+            total_columns=0,
+            columns=[],
+            quality_score=0.0,
+            quality_level=DataQualityLevel.NOT_ASSESSED,
+            quality_issues=[QualityIssue(
+                severity=CritiqueSeverity.CRITICAL,
+                category="extraction_error",
+                description=f"Failed to process ZIP: {str(e)}",
+            )],
+            feasibility_assessment=f"Error processing ZIP archive: {str(e)}",
+        )
+    finally:
+        # Clean up temp directory
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def analyze_file(data_file: DataFile) -> DataExplorationResult:
     """
     Perform complete analysis on a data file.
     
     This is the main function used by the DATA_EXPLORER node.
+    Supports CSV, Excel, and ZIP files (extracts and analyzes contents).
     
     Args:
         data_file: DataFile object with file path and metadata.
@@ -593,6 +846,9 @@ def analyze_file(data_file: DataFile) -> DataExplorationResult:
         DataExplorationResult with complete analysis.
     """
     from src.state.enums import CritiqueSeverity
+    import zipfile
+    import tempfile
+    import shutil
     
     if not HAS_PANDAS:
         return DataExplorationResult(
@@ -609,14 +865,22 @@ def analyze_file(data_file: DataFile) -> DataExplorationResult:
     filepath = str(data_file.filepath)
     
     try:
+        # Handle ZIP files by extracting and analyzing contents
+        if data_file.content_type == "application/zip" or filepath.lower().endswith(".zip"):
+            return _analyze_zip_file(data_file, filepath)
+        
         # Load data
-        if data_file.content_type == "text/csv":
+        if data_file.content_type == "text/csv" or filepath.lower().endswith(".csv"):
             df = pd.read_csv(filepath)
         elif data_file.content_type in (
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel"
-        ):
+        ) or filepath.lower().endswith((".xlsx", ".xls")):
             df = pd.read_excel(filepath)
+        elif filepath.lower().endswith(".parquet"):
+            df = pd.read_parquet(filepath)
+        elif filepath.lower().endswith(".json"):
+            df = pd.read_json(filepath)
         else:
             return DataExplorationResult(
                 files_analyzed=[data_file],

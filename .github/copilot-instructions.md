@@ -6,29 +6,105 @@
 - **Claude 4.5 Family** via `langchain-anthropic` with task-based model selection
 - **LangSmith** for tracing, debugging, and evaluation
 - **Tavily** for web search capabilities
-- **Memory**: Checkpointers (SQLite/MemorySaver) for conversation persistence, InMemoryStore for long-term memory
+- **DuckDB** for high-performance data analysis (handles 46M+ rows)
+- **Memory**: Checkpointers (SQLite/MemorySaver) for conversation persistence
 
-## Project Structure
+## Complete Project Structure
 
 ```
 src/
-├── agents/           # LangGraph agent definitions
-│   ├── base.py       # ReAct agent with tools
-│   └── research.py   # Research-focused agent
-├── tools/            # Tool definitions (@tool decorated)
-│   ├── search.py     # Tavily web search
-│   └── basic.py      # Utility tools
-├── memory/           # Persistence layer
+├── agents/              # Agent implementations
+│   ├── base.py          # ReAct agent with tools
+│   ├── research.py      # Research-focused agent
+│   └── data_analyst.py  # Data analysis agent
+├── nodes/               # LangGraph workflow nodes
+│   ├── intake.py        # Research intake processing
+│   ├── data_explorer.py # Dataset analysis (DuckDB, parallel loading)
+│   ├── literature_reviewer.py    # Academic search (Semantic Scholar, arXiv)
+│   ├── literature_synthesizer.py # Theme extraction, gap identification
+│   ├── gap_identifier.py         # Gap analysis with human approval
+│   ├── planner.py                # Methodology planning with approval
+│   ├── data_analyst.py           # Statistical analysis execution
+│   ├── conceptual_synthesizer.py # Theoretical framework building
+│   └── writer.py                 # Paper section composition
+├── tools/               # 17 tool modules with 35+ tools
+│   ├── academic_search.py    # Semantic Scholar, arXiv, Tavily
+│   ├── citation_analysis.py  # Citation metrics, network analysis
+│   ├── data_loading.py       # Load CSV, Parquet, Excel, Stata, SPSS, ZIP
+│   ├── data_profiling.py     # Column stats, distributions, outliers
+│   ├── data_transformation.py # Filter, join, aggregate, create variables
+│   ├── data_analysis.py      # Regression, correlation, hypothesis tests
+│   ├── data_interpretation.py # Insights, recommendations
+│   ├── gap_analysis.py       # Literature gap detection
+│   ├── methodology.py        # Research design tools
+│   └── contribution.py       # Contribution framing
+├── state/               # State management
+│   ├── schema.py        # WorkflowState TypedDict (30+ fields)
+│   ├── models.py        # 50+ Pydantic models
+│   └── enums.py         # Status and type enumerations
+├── cache/               # SQLite-based LLM response caching
+│   └── __init__.py      # get_cache(), get_cache_policy()
+├── citations/           # Citation management
+│   ├── manager.py       # CitationManager class
+│   ├── formatter.py     # APA formatting
+│   └── reference_list.py
+├── style/               # Academic writing style enforcement
+│   ├── banned_words.py  # 100+ flagged words
+│   ├── academic_tone.py # Tone analysis
+│   ├── hedging.py       # Hedging language detection
+│   └── enforcer.py      # StyleEnforcer with auto-fix
+├── writers/             # Section-specific paper writers
+│   ├── abstract.py
+│   ├── introduction.py
+│   ├── literature_review.py
+│   ├── methods.py
+│   ├── results.py
+│   ├── discussion.py
+│   └── conclusion.py
+├── memory/              # Persistence layer
 │   ├── checkpointer.py  # Thread-based conversation memory
 │   └── store.py         # Long-term cross-session memory
-├── config/           # Environment and settings
-│   └── settings.py
-└── main.py           # CLI entrypoint
+├── config/              # Environment and settings
+│   └── settings.py      # All config from env vars
+└── server.py            # Flask intake form server
 
-studio/               # LangGraph Studio configuration
-├── langgraph.json
-└── graphs.py
+studio/                  # LangGraph Studio configuration
+├── graphs.py            # Workflow graph definition
+└── langgraph.json
 ```
+
+## Research Workflow Architecture
+
+```
+INTAKE → DATA_EXPLORER → LITERATURE_REVIEWER → LITERATURE_SYNTHESIZER
+                              ↓
+                    GAP_IDENTIFIER (interrupt for approval)
+                              ↓
+                    PLANNER (interrupt for approval)
+                              ↓
+              ┌───────────────┴───────────────┐
+              ↓                               ↓
+       DATA_ANALYST              CONCEPTUAL_SYNTHESIZER
+       (empirical)                   (theoretical)
+              ↓                               ↓
+              └───────────────┬───────────────┘
+                              ↓
+                           WRITER → END
+```
+
+### Node Details
+
+| Node | Purpose | Caching |
+|------|---------|---------|
+| `intake` | Parse form, validate inputs, process uploads | Never |
+| `data_explorer` | Parallel dataset loading, schema detection | Never |
+| `literature_reviewer` | Academic search (Semantic Scholar, arXiv) | 1 hour |
+| `literature_synthesizer` | Extract themes, identify gaps | 30 min |
+| `gap_identifier` | Analyze gaps, human approval checkpoint | 30 min |
+| `planner` | Design methodology, human approval | Never |
+| `data_analyst` | Execute regressions, correlations, tests | 30 min |
+| `conceptual_synthesizer` | Build theoretical frameworks | 30 min |
+| `writer` | Generate paper sections with style enforcement | 10 min |
 
 ## Agent Model Configuration
 
@@ -194,6 +270,11 @@ uv run langgraph dev
 | `TAVILY_API_KEY` | Tavily API key for web search | ✅ |
 | `LANGSMITH_TRACING` | Enable tracing (default: true) | ❌ |
 | `LANGSMITH_PROJECT` | Project name in LangSmith | ❌ |
+| `CACHE_ENABLED` | Enable LLM response caching (default: true) | ❌ |
+| `CACHE_PATH` | SQLite cache location | ❌ |
+| `CACHE_TTL_LITERATURE` | Literature cache TTL in seconds (default: 3600) | ❌ |
+| `CACHE_TTL_SYNTHESIS` | Synthesis cache TTL in seconds (default: 1800) | ❌ |
+| `CACHE_TTL_WRITER` | Writer cache TTL in seconds (default: 600) | ❌ |
 
 ## Critical Rules for All Agents
 
