@@ -35,9 +35,6 @@ from src.state.enums import (
     DataRequirementPriority,
     AcquisitionStatus,
     CodeExecutionStatus,
-    # Sprint 15: Visualization & Tables
-    ArtifactFormat,
-    FigureFormat,
 )
 
 
@@ -3306,99 +3303,4 @@ class AcquiredDataset(BaseModel):
     date_range: TimeRange | None = Field(
         default=None,
         description="Date range of the acquired data"
-    )
-
-
-# =============================================================================
-# Sprint 15: Visualization & Table Generation Models
-# =============================================================================
-
-
-class TableArtifact(BaseModel):
-    """A publication-ready table artifact.
-    
-    Stores table content in various formats (LaTeX, markdown, HTML)
-    along with metadata for academic paper integration.
-    """
-    
-    table_id: str = Field(
-        default_factory=lambda: f"tab_{str(uuid4())[:8]}",
-        description="Unique identifier for the table"
-    )
-    title: str = Field(
-        ...,
-        description="Table title (used in caption)"
-    )
-    caption: str = Field(
-        default="",
-        description="Full table caption"
-    )
-    format: "ArtifactFormat" = Field(
-        default="LATEX",
-        description="Output format (LATEX, MARKDOWN, HTML)"
-    )
-    content: str = Field(
-        ...,
-        description="Table content in the specified format"
-    )
-    source_data: str = Field(
-        default="",
-        description="Name of the source dataset"
-    )
-    notes: str | None = Field(
-        default=None,
-        description="Table notes (significance indicators, data sources, etc.)"
-    )
-    created_at: datetime = Field(
-        default_factory=_utc_now,
-        description="When the table was generated"
-    )
-
-
-class FigureArtifact(BaseModel):
-    """A publication-ready figure artifact.
-    
-    Stores figure as base64-encoded image along with
-    metadata for academic paper integration.
-    """
-    
-    figure_id: str = Field(
-        default_factory=lambda: f"fig_{str(uuid4())[:8]}",
-        description="Unique identifier for the figure"
-    )
-    title: str = Field(
-        ...,
-        description="Figure title"
-    )
-    caption: str = Field(
-        default="",
-        description="Full figure caption"
-    )
-    format: "FigureFormat" = Field(
-        default="PNG",
-        description="Image format (PNG, PDF, SVG)"
-    )
-    content_base64: str = Field(
-        ...,
-        description="Base64-encoded image content"
-    )
-    source_data: str = Field(
-        default="",
-        description="Name of the source dataset"
-    )
-    width_inches: float = Field(
-        default=10.0,
-        description="Figure width in inches"
-    )
-    height_inches: float = Field(
-        default=6.0,
-        description="Figure height in inches"
-    )
-    notes: str | None = Field(
-        default=None,
-        description="Figure notes"
-    )
-    created_at: datetime = Field(
-        default_factory=_utc_now,
-        description="When the figure was generated"
     )

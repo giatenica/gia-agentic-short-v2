@@ -441,10 +441,10 @@ class TestRouteByResearchType:
 class TestRouteAfterPlanner:
     """Tests for route_after_planner."""
     
-    def test_route_to_data_acquisition(self, state_with_research_plan):
-        """Test routing to data acquisition after planner (Sprint 14 flow)."""
+    def test_route_to_data_analyst(self, state_with_research_plan):
+        """Test routing to data analyst after planner."""
         result = route_after_planner(state_with_research_plan)
-        assert result == "data_acquisition"
+        assert result == "data_analyst"
     
     def test_route_to_end_on_error(self):
         """Test routing to end on errors."""

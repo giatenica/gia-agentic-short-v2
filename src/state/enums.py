@@ -504,24 +504,3 @@ class CodeExecutionStatus(str, Enum):
     ERROR = "error"                  # Runtime error
     TIMEOUT = "timeout"              # Exceeded time limit
     VALIDATION_FAILED = "validation_failed"  # Code failed safety checks
-
-
-# =============================================================================
-# Sprint 15: Visualization & Table Generation Enums
-# =============================================================================
-
-
-class ArtifactFormat(str, Enum):
-    """Output format for table artifacts."""
-    
-    LATEX = "LATEX"        # LaTeX tabular format
-    MARKDOWN = "MARKDOWN"  # Markdown table format
-    HTML = "HTML"          # HTML table format
-
-
-class FigureFormat(str, Enum):
-    """Output format for figure artifacts."""
-    
-    PNG = "PNG"    # PNG image (default)
-    PDF = "PDF"    # PDF vector format
-    SVG = "SVG"    # SVG vector format
