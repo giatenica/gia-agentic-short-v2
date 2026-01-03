@@ -22,7 +22,6 @@ from src.state.enums import ArtifactFormat, FigureFormat
 from src.state.models import (
     TableArtifact,
     FigureArtifact,
-    RegressionResult,
 )
 from src.tools.data_loading import get_registry
 

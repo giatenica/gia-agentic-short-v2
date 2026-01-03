@@ -3333,8 +3333,8 @@ class TableArtifact(BaseModel):
         default="",
         description="Full table caption"
     )
-    format: "ArtifactFormat" = Field(
-        default="LATEX",
+    format: ArtifactFormat = Field(
+        default=ArtifactFormat.LATEX,
         description="Output format (LATEX, MARKDOWN, HTML)"
     )
     content: str = Field(
@@ -3374,8 +3374,8 @@ class FigureArtifact(BaseModel):
         default="",
         description="Full figure caption"
     )
-    format: "FigureFormat" = Field(
-        default="PNG",
+    format: FigureFormat = Field(
+        default=FigureFormat.PNG,
         description="Image format (PNG, PDF, SVG)"
     )
     content_base64: str = Field(

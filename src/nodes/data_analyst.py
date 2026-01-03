@@ -528,10 +528,17 @@ def _generate_visualization_artifacts(
     # Table 2: Regression Results (if regressions were run)
     if reg_results:
         try:
-            reg_dicts = [
-                r.model_dump() if hasattr(r, "model_dump") else r
-                for r in reg_results
-            ]
+            reg_dicts: list[dict[str, Any]] = []
+            for r in reg_results:
+                if isinstance(r, RegressionResult):
+                    reg_dicts.append(r.model_dump())
+                elif isinstance(r, dict):
+                    reg_dicts.append(r)
+                else:
+                    logger.warning(
+                        "DATA_ANALYST: Skipping unexpected regression result type: %s",
+                        type(r),
+                    )
             result = create_regression_table.invoke({
                 "regression_results": reg_dicts,
                 "format": "latex",
@@ -562,7 +569,7 @@ def _generate_visualization_artifacts(
     
     # Figure 1: Time series (if date column detected)
     df = registry.get_dataframe(dataset_name)
-    date_cols = [c for c in df.columns if df[c].dtype in ['datetime64[ns]', 'object']]
+    date_cols = [c for c in df.columns if df[c].dtype.name in ['datetime64[ns]', 'object']]
     
     # Try to identify a date column
     potential_date_cols = [c for c in date_cols if any(
