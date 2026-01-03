@@ -40,6 +40,9 @@ from src.state.models import (
     AcquiredDataset,
     AcquisitionFailure,
     CodeSnippet,
+    # Sprint 15 models
+    TableArtifact,
+    FigureArtifact,
 )
 from src.state.enums import ResearchStatus
 
@@ -243,6 +246,16 @@ class WorkflowState(TypedDict, total=False):
     
     # Generated code snippets for custom acquisition
     generated_code_snippets: list[CodeSnippet]
+    
+    # =========================================================================
+    # Sprint 15: Visualization & Tables Context
+    # =========================================================================
+    
+    # Generated table artifacts (summary stats, regressions, correlations)
+    tables: list[TableArtifact]
+    
+    # Generated figure artifacts (time series, scatter, distributions)
+    figures: list[FigureArtifact]
     
     # =========================================================================
     # Workflow Metadata

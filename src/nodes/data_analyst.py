@@ -27,6 +27,8 @@ from src.state.models import (
     RegressionResult,
     RegressionCoefficient,
     WorkflowError,
+    TableArtifact,
+    FigureArtifact,
 )
 from src.state.schema import WorkflowState
 
@@ -51,6 +53,16 @@ from src.tools.llm_interpretation import (
     summarize_findings,
 )
 from src.tools.data_loading import get_registry
+
+# Sprint 15: Visualization tools
+from src.tools.visualization import (
+    create_summary_statistics_table,
+    create_regression_table,
+    create_correlation_matrix_table,
+    create_time_series_plot,
+    create_scatter_plot,
+    create_distribution_plot,
+)
 
 import logging
 
@@ -476,6 +488,139 @@ def _generate_llm_interpretations(
     return "\n\n".join(interpretations) if interpretations else ""
 
 
+def _generate_visualization_artifacts(
+    dataset_name: str,
+    key_vars: list[str],
+    reg_results: list[RegressionResult],
+    data_info: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Generate publication-ready tables and figures.
+    
+    Returns:
+        Tuple of (tables, figures) as lists of artifact dicts.
+    """
+    tables = []
+    figures = []
+    
+    if not dataset_name:
+        return tables, figures
+    
+    registry = get_registry()
+    if dataset_name not in registry.datasets:
+        return tables, figures
+    
+    # Table 1: Summary Statistics
+    try:
+        result = create_summary_statistics_table.invoke({
+            "dataset_name": dataset_name,
+            "variables": key_vars if key_vars else None,
+            "format": "latex",
+            "title": "Summary Statistics",
+            "label": "tab:summary",
+        })
+        if result.get("status") == "success" and result.get("artifact"):
+            tables.append(result["artifact"])
+            logger.info("DATA_ANALYST: Generated summary statistics table (Table 1)")
+    except Exception as e:
+        logger.warning(f"DATA_ANALYST: Failed to generate summary statistics table: {e}")
+    
+    # Table 2: Regression Results (if regressions were run)
+    if reg_results:
+        try:
+            reg_dicts = [
+                r.model_dump() if hasattr(r, "model_dump") else r
+                for r in reg_results
+            ]
+            result = create_regression_table.invoke({
+                "regression_results": reg_dicts,
+                "format": "latex",
+                "title": "Regression Results",
+                "label": "tab:regression",
+            })
+            if result.get("status") == "success" and result.get("artifact"):
+                tables.append(result["artifact"])
+                logger.info("DATA_ANALYST: Generated regression table (Table 2)")
+        except Exception as e:
+            logger.warning(f"DATA_ANALYST: Failed to generate regression table: {e}")
+    
+    # Table 3: Correlation Matrix (if multiple numeric variables)
+    if len(key_vars) >= 2:
+        try:
+            result = create_correlation_matrix_table.invoke({
+                "dataset_name": dataset_name,
+                "variables": key_vars,
+                "format": "latex",
+                "title": "Correlation Matrix",
+                "label": "tab:correlation",
+            })
+            if result.get("status") == "success" and result.get("artifact"):
+                tables.append(result["artifact"])
+                logger.info("DATA_ANALYST: Generated correlation matrix (Table 3)")
+        except Exception as e:
+            logger.warning(f"DATA_ANALYST: Failed to generate correlation table: {e}")
+    
+    # Figure 1: Time series (if date column detected)
+    df = registry.get_dataframe(dataset_name)
+    date_cols = [c for c in df.columns if df[c].dtype in ['datetime64[ns]', 'object']]
+    
+    # Try to identify a date column
+    potential_date_cols = [c for c in date_cols if any(
+        d in c.lower() for d in ['date', 'time', 'year', 'month', 'day', 'period']
+    )]
+    
+    if potential_date_cols and len(key_vars) >= 1:
+        try:
+            # Take first numeric variable for time series
+            value_cols = [v for v in key_vars if v in df.select_dtypes(include=['number']).columns][:3]
+            if value_cols:
+                result = create_time_series_plot.invoke({
+                    "dataset_name": dataset_name,
+                    "date_column": potential_date_cols[0],
+                    "value_columns": value_cols,
+                    "title": f"Time Series of {', '.join(value_cols[:2])}",
+                    "ylabel": "Value",
+                })
+                if result.get("status") == "success" and result.get("artifact"):
+                    figures.append(result["artifact"])
+                    logger.info("DATA_ANALYST: Generated time series plot (Figure 1)")
+        except Exception as e:
+            logger.warning(f"DATA_ANALYST: Failed to generate time series plot: {e}")
+    
+    # Figure 2: Scatter plot (for regression variables)
+    if reg_results and len(key_vars) >= 2:
+        try:
+            result = create_scatter_plot.invoke({
+                "dataset_name": dataset_name,
+                "x_column": key_vars[1],  # First independent var
+                "y_column": key_vars[0],  # Dependent var
+                "title": f"{key_vars[0]} vs {key_vars[1]}",
+                "add_regression_line": True,
+            })
+            if result.get("status") == "success" and result.get("artifact"):
+                figures.append(result["artifact"])
+                logger.info("DATA_ANALYST: Generated scatter plot (Figure 2)")
+        except Exception as e:
+            logger.warning(f"DATA_ANALYST: Failed to generate scatter plot: {e}")
+    
+    # Figure 3: Distribution of dependent variable
+    if key_vars:
+        try:
+            result = create_distribution_plot.invoke({
+                "dataset_name": dataset_name,
+                "column": key_vars[0],
+                "plot_type": "histogram",
+                "title": f"Distribution of {key_vars[0]}",
+            })
+            if result.get("status") == "success" and result.get("artifact"):
+                figures.append(result["artifact"])
+                logger.info("DATA_ANALYST: Generated distribution plot (Figure 3)")
+        except Exception as e:
+            logger.warning(f"DATA_ANALYST: Failed to generate distribution plot: {e}")
+    
+    return tables, figures
+
+
 # =============================================================================
 # Main Node Function
 # =============================================================================
@@ -643,6 +788,18 @@ def data_analyst_node(state: WorkflowState) -> dict:
     if llm_interpretations:
         analysis_notes.append("LLM interpretations generated for academic prose")
     
+    # Sprint 15: Generate visualization artifacts (tables and figures)
+    tables, figures = _generate_visualization_artifacts(
+        dataset_name=dataset_name,
+        key_vars=key_vars,
+        reg_results=reg_results,
+        data_info=data_info,
+    )
+    if tables:
+        analysis_notes.append(f"Generated {len(tables)} table(s)")
+    if figures:
+        analysis_notes.append(f"Generated {len(figures)} figure(s)")
+    
     # Determine hypothesis support
     hypothesis_supported = None
     hypothesis_summary = ""
@@ -714,6 +871,8 @@ def data_analyst_node(state: WorkflowState) -> dict:
         "status": ResearchStatus.ANALYSIS_COMPLETE,
         "analysis": analysis_result.model_dump(),
         "data_analyst_output": analysis_result.model_dump(),  # For routing
+        "tables": tables,  # Sprint 15: Table artifacts
+        "figures": figures,  # Sprint 15: Figure artifacts
         "messages": [
             AIMessage(content=" | ".join(summary_parts))
         ],

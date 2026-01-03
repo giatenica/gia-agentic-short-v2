@@ -67,6 +67,7 @@ NODE_PROGRESS_MESSAGES = {
     "literature_synthesizer": "Synthesizing literature findings...",
     "gap_identifier": "Identifying research gaps...",
     "planner": "Creating research plan...",
+    "data_acquisition": "Acquiring external data sources...",
     "data_analyst": "Performing data analysis...",
     "conceptual_synthesizer": "Building conceptual framework...",
     "writer": "Writing paper sections...",
