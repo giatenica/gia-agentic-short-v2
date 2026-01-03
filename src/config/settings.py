@@ -32,6 +32,9 @@ class Settings:
     # Google Serper (alternative search)
     serper_api_key: str = os.getenv("GOOGLE_SERPER_API_KEY", "")
 
+    # External Data APIs (Sprint 13)
+    fred_api_key: str = os.getenv("FRED_API_KEY", "")
+
     # Node-level caching configuration
     # Caches LLM responses to avoid redundant computation during development/testing
     cache_enabled: bool = os.getenv("CACHE_ENABLED", "true").lower() == "true"
