@@ -11,12 +11,6 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
-def _utc_now() -> datetime:
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
-
-
 from src.state.enums import (
     CritiqueSeverity,
     EvidenceStrength,
@@ -35,6 +29,11 @@ from src.state.enums import (
     RelationshipType,
     PropositionStatus,
 )
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 # =============================================================================

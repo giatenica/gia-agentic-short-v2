@@ -249,7 +249,7 @@ cd studio && uv run langgraph dev
 
 - API keys loaded from environment variables (never hardcoded)
 - ZIP extraction protected against zip bombs and path traversal
-- Safe expression evaluation (AST-based, no `eval()` on user input)
+- Safe expression evaluation (regex-based pattern blocking, no `eval()` on user input)
 - Expression validation blocks code injection patterns
 - CORS restricted to localhost in development
 - Timezone-aware datetime handling (UTC)

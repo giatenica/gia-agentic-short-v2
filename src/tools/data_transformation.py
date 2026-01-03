@@ -36,6 +36,12 @@ _BLOCKED_EVAL_PATTERNS = [
     r'\bsys\.',          # sys module
     r'\bsubprocess\.',   # subprocess module
     r'@',                # decorators/matmul that might be misused
+    r'\bgetattr\b',      # attribute access
+    r'\bsetattr\b',      # attribute setting
+    r'\bdelattr\b',      # attribute deletion
+    r'\bcompile\b',      # dynamic code compilation
+    r'\bglobals\b',      # global namespace access
+    r'\blocals\b',       # local namespace access
 ]
 
 
