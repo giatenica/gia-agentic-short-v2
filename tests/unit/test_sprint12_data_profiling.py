@@ -12,7 +12,7 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from importlib.util import find_spec
 from unittest.mock import MagicMock, patch
 
@@ -133,7 +133,7 @@ def loaded_dataset(sample_csv_file):
     registry.clear()
     
     # Load the dataset
-    result = load_data.invoke({
+    load_data.invoke({
         "filepath": sample_csv_file,
         "name": "test_dataset"
     })
@@ -503,7 +503,7 @@ class TestDetectPanelStructure:
         result = detect_panel_structure.invoke({"name": loaded_panel_dataset})
         
         assert "error" not in result
-        assert result["is_panel"] == True
+        assert result["is_panel"] is True
         assert result["structure_type"] == DataStructureType.PANEL.value
 
 

@@ -320,11 +320,13 @@ def _detect_encoding(filepath: str) -> str | None:
             result = charset_normalizer.from_bytes(sample).best()
             if result:
                 return result.encoding
-        except Exception:
-            pass
+        except Exception as e:
+            # Log at debug level for troubleshooting encoding issues
+            logging.debug(f"charset_normalizer failed for {filepath}: {e}")
     
-    # Fallback: Try common encodings
-    encodings_to_try = ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]
+    # Fallback: Try common encodings (avoid overlapping aliases)
+    # Note: latin-1 and iso-8859-1 are identical, cp1252 is a superset
+    encodings_to_try = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
     
     for encoding in encodings_to_try:
         try:
@@ -379,6 +381,8 @@ def _detect_delimiter(filepath: str, encoding: str = "utf-8") -> str | None:
             return max(delimiters, key=delimiters.get)
         
     except Exception:
+        # If any error occurs during delimiter detection, fall back to pandas defaults.
+        # This handles corrupted files, permission issues, or unexpected formats.
         pass
     
     return None  # Let pandas use default

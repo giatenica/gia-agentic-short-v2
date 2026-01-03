@@ -33,10 +33,51 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
+import logging
+
 from src.config import settings
 from src.tools.data_loading import get_registry
 from src.state.enums import QualityFlag, DataStructureType, CritiqueSeverity
 from src.state.models import DatasetInfo, QualityFlagItem, DataExplorationSummary
+
+# =============================================================================
+# Quality Score Constants
+# =============================================================================
+# Weights for calculating overall data quality scores.
+# Higher penalties for more severe issues.
+QUALITY_SCORE_PENALTY_CRITICAL = 25  # Critical issues severely impact usability
+QUALITY_SCORE_PENALTY_MAJOR = 10     # Major issues require attention
+QUALITY_SCORE_PENALTY_MINOR = 3      # Minor issues for awareness
+
+# Semantic type inference thresholds
+SEMANTIC_TYPE_UNIQUE_RATIO_ID = 0.9       # Column is likely an ID if >90% unique
+SEMANTIC_TYPE_CARDINALITY_LOW = 0.05      # Categorical if <5% cardinality
+SEMANTIC_TYPE_CARDINALITY_MEDIUM = 0.2    # Possibly categorical if <20%
+SEMANTIC_TYPE_PANEL_ENTITY_MIN = 0.001    # Min unique ratio for entity column
+SEMANTIC_TYPE_PANEL_ENTITY_MAX = 0.5      # Max unique ratio for entity column
+SEMANTIC_TYPE_FREE_TEXT_LENGTH = 50       # Min avg length for free text
+SEMANTIC_TYPE_DATE_MATCH_THRESHOLD = 0.8  # Min proportion to detect dates
+
+
+def _calculate_quality_score(quality_flags: list[dict[str, Any]]) -> int:
+    """Calculate overall quality score based on issue severities.
+    
+    Args:
+        quality_flags: List of quality flag dicts with 'severity' key
+        
+    Returns:
+        Quality score from 0-100 (higher is better)
+    """
+    penalty = 0
+    for flag in quality_flags:
+        severity = flag.get("severity", "minor")
+        if severity == "critical":
+            penalty += QUALITY_SCORE_PENALTY_CRITICAL
+        elif severity == "major":
+            penalty += QUALITY_SCORE_PENALTY_MAJOR
+        elif severity == "minor":
+            penalty += QUALITY_SCORE_PENALTY_MINOR
+    return max(0, 100 - penalty)
 
 
 def _severity_to_enum(severity_str: str) -> CritiqueSeverity:
@@ -812,9 +853,8 @@ def deep_profile_dataset(
     if profile["data_structure"]["type"] in ["time_series", "panel"]:
         profile["temporal_analysis"] = _analyze_temporal_patterns(df)
     
-    # Overall quality score
-    quality_issues = [f for f in profile["quality_flags"] if f["severity"] in ["critical", "major"]]
-    profile["quality_score"] = max(0, 100 - len(quality_issues) * 15)
+    # Overall quality score (using consolidated scoring function)
+    profile["quality_score"] = _calculate_quality_score(profile["quality_flags"])
     
     return profile
 
@@ -910,9 +950,11 @@ def _infer_string_type(col: str, sample: "pd.Series") -> dict[str, Any]:
     # Check for date/time strings
     try:
         parsed = pd.to_datetime(sample_str.head(100), format="mixed", errors="coerce")
-        if parsed.notna().mean() > 0.8:
+        if parsed.notna().mean() > SEMANTIC_TYPE_DATE_MATCH_THRESHOLD:
             return {"semantic_type": "datetime_string", "confidence": 0.85}
     except Exception:
+        # Date parsing can fail for many reasons (exotic locales, ambiguous formats).
+        # We silently skip since we'll fall back to other type detection methods.
         pass
     
     # Check for email
@@ -1003,7 +1045,6 @@ def _detect_data_structure(df: "pd.DataFrame") -> dict[str, Any]:
             result["confidence"] = min(best_time[2], 0.85)
             
             # Analyze panel balance
-            panel_counts = df.groupby([best_entity[0], best_time[0]]).size()
             n_entities = df[best_entity[0]].nunique()
             n_periods = df[best_time[0]].nunique()
             expected_obs = n_entities * n_periods
@@ -1137,6 +1178,8 @@ def _generate_quality_flags(df: "pd.DataFrame", dataset_name: str) -> list[dict[
                                 "suggestion": "Consider transformation for parametric tests",
                             })
                     except Exception:
+                        # Shapiro-Wilk can fail with extreme values or infinite data.
+                        # Safe to skip; non-normality is an informational flag only.
                         pass
     
     # Dataset-level checks
@@ -1399,12 +1442,13 @@ def assess_data_quality(name: str) -> dict[str, Any]:
     
     flags = _generate_quality_flags(df, name)
     
-    # Calculate quality score
+    # Calculate quality score using consolidated scoring function
+    score = _calculate_quality_score(flags)
+    
+    # Count issues by severity for summary
     critical_count = sum(1 for f in flags if f["severity"] == "critical")
     major_count = sum(1 for f in flags if f["severity"] == "major")
     minor_count = sum(1 for f in flags if f["severity"] == "minor")
-    
-    score = max(0, 100 - critical_count * 25 - major_count * 10 - minor_count * 3)
     
     # Determine quality level
     if score >= 80:
@@ -1543,6 +1587,9 @@ def detect_panel_structure(name: str) -> dict[str, Any]:
                                 "within_pct": round(within_var / overall_var * 100, 1),
                             }
                     except Exception:
+                        # Variation decomposition can fail with constant columns or
+                        # single-entity groups. Safe to skip per-column; researchers
+                        # should review raw data for edge cases.
                         pass
             
             if variation:
@@ -1579,7 +1626,7 @@ def generate_data_prose_summary(
     - Data quality and limitations
     - Panel/time series structure if applicable
     
-    Returns a DataExplorationSummary object for use by downstream nodes.
+    Returns a dict containing a DataExplorationSummary (model_dump format) for use by downstream nodes.
     
     Args:
         dataset_names: Names of datasets to summarize
@@ -1587,7 +1634,8 @@ def generate_data_prose_summary(
         focus_variables: Key variables to emphasize
         
     Returns:
-        DataExplorationSummary with prose description and metadata
+        Dict with 'summary' key containing DataExplorationSummary.model_dump(),
+        plus additional metadata (status, prose_description, n_datasets, etc.)
     """
     if not HAS_PANDAS:
         return {"error": "pandas is required"}
@@ -1626,6 +1674,8 @@ def generate_data_prose_summary(
                         date_range_start = date(int(details['min_period']), 1, 1)
                         date_range_end = date(int(details['max_period']), 12, 31)
                     except (ValueError, TypeError):
+                        # Year-based parsing can fail if period is not a valid integer.
+                        # Date range is optional; safe to skip.
                         pass
                 elif "min_date" in details:
                     try:
@@ -1635,6 +1685,8 @@ def generate_data_prose_summary(
                         date_range_start = date.fromisoformat(min_str)
                         date_range_end = date.fromisoformat(max_str)
                     except (ValueError, TypeError):
+                        # ISO date parsing can fail with non-standard formats.
+                        # Date range is optional; safe to skip.
                         pass
             
             dataset_info = DatasetInfo(
@@ -1784,7 +1836,8 @@ Use formal academic prose suitable for a peer-reviewed journal."""
         return response.content
         
     except Exception as e:
-        # Fallback template
+        # Log the error for debugging API issues, rate limits, or config problems
+        logging.warning(f"LLM prose generation failed, using template fallback: {e}")
         return _generate_template_methods_prose(profiles)
 
 

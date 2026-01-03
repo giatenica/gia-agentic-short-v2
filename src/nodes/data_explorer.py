@@ -24,7 +24,7 @@ import logging
 
 from langchain_core.messages import AIMessage
 
-from src.state.enums import ResearchStatus, DataQualityLevel, ColumnType, CritiqueSeverity, QualityFlag, DataStructureType
+from src.state.enums import ResearchStatus, DataQualityLevel, ColumnType, CritiqueSeverity
 from src.state.models import (
     DataFile,
     DataExplorationResult,
