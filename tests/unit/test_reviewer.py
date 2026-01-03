@@ -4,8 +4,7 @@ Sprint 7: Paper Quality Evaluation and Revision Loop.
 """
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.review.criteria import (
     evaluate_contribution,
@@ -20,18 +19,14 @@ from src.nodes.reviewer import (
     reviewer_node,
     route_after_reviewer,
     _generate_paper_markdown,
-    MAX_REVISIONS,
-    APPROVE_THRESHOLD,
 )
 from src.state.models import (
     QualityScore,
     ReviewCritiqueItem,
     ReviewCritique,
     RevisionRequest,
-    ReviewerOutput,
     calculate_overall_score,
     determine_review_decision,
-    REVIEW_THRESHOLDS,
     DIMENSION_WEIGHTS,
 )
 from src.state.enums import ResearchStatus

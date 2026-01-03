@@ -273,20 +273,18 @@ def _route_after_reviewer(state: WorkflowState) -> Literal["writer", "output", "
     """
     Route after reviewer based on review decision.
     
+    Delegates to the canonical implementation in src.nodes.reviewer.route_after_reviewer
+    to avoid code duplication. Maps "__end__" to END constant.
+    
     Routes to:
-    - "output" if approved by human
+    - "output" if approved by human or escalated
     - "writer" if revision needed (loops back)
     - END if rejected or error
     """
-    decision = state.get("review_decision")
-    human_approved = state.get("human_approved", False)
-    
-    if decision == "approve" and human_approved:
-        return "output"
-    elif decision == "revise":
-        return "writer"
-    else:
-        return END
+    from src.nodes.reviewer import route_after_reviewer
+    result = route_after_reviewer(state)
+    # Map __end__ string to END constant for LangGraph
+    return END if result == "__end__" else result
 
 
 def output_node(state: WorkflowState) -> dict:

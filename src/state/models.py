@@ -2677,11 +2677,11 @@ class ReviewCritique(BaseModel):
                 return score.score
         return None
     
-    def get_critical_items(self) -> list[CritiqueItem]:
+    def get_critical_items(self) -> list[ReviewCritiqueItem]:
         """Get all critical severity items."""
         return [item for item in self.critique_items if item.severity == "critical"]
     
-    def get_items_by_section(self, section: str) -> list[CritiqueItem]:
+    def get_items_by_section(self, section: str) -> list[ReviewCritiqueItem]:
         """Get all critique items for a specific section."""
         return [item for item in self.critique_items if item.section == section]
     

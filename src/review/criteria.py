@@ -18,7 +18,6 @@ from typing import Any
 from src.state.models import (
     QualityScore,
     ReviewCritiqueItem,
-    PaperSection,
     WriterOutput,
 )
 from src.style.banned_words import BANNED_WORDS
@@ -672,9 +671,9 @@ def evaluate_writing(
         weaknesses.append(f"Banned words found: {', '.join(banned_found[:5])}")
         score -= 0.1 * min(len(banned_found), 5)
     
-    # Check 2: Informal language
+    # Check 2: Informal language (using word boundary regex)
     informal_indicators = ["stuff", "things", "lots", "gonna", "wanna", "kinda", "really", "very", "just"]
-    informal_found = [word for word in informal_indicators if word in all_content_lower]
+    informal_found = [word for word in informal_indicators if re.search(rf'\b{word}\b', all_content_lower)]
     if not informal_found:
         strengths.append("Formal academic tone maintained")
         score += 0.4
@@ -682,9 +681,9 @@ def evaluate_writing(
         weaknesses.append(f"Informal language detected: {', '.join(informal_found[:3])}")
         score -= 0.3
     
-    # Check 3: Contractions
+    # Check 3: Contractions (using word boundary regex)
     contractions = ["don't", "can't", "won't", "isn't", "aren't", "doesn't", "didn't", "couldn't"]
-    contractions_found = [c for c in contractions if c in all_content_lower]
+    contractions_found = [c for c in contractions if re.search(rf'\b{re.escape(c)}\b', all_content_lower)]
     if not contractions_found:
         strengths.append("No contractions used")
         score += 0.3
@@ -719,9 +718,9 @@ def evaluate_writing(
         weaknesses.append("Limited citations; may need more references")
         score -= 0.4
     
-    # Check 6: Hedging language (appropriate uncertainty)
+    # Check 6: Hedging language (using word boundary regex for accuracy)
     hedging_words = ["may", "might", "could", "suggest", "appear", "seem", "indicate"]
-    hedging_count = sum(1 for word in hedging_words if word in all_content_lower)
+    hedging_count = sum(len(re.findall(rf'\b{word}\b', all_content_lower)) for word in hedging_words)
     
     if 5 <= hedging_count <= 20:
         strengths.append("Appropriate use of hedging language")
@@ -733,9 +732,9 @@ def evaluate_writing(
         weaknesses.append("Excessive hedging may weaken claims")
         score -= 0.2
     
-    # Check 7: First person usage
-    first_person = ["i ", "we ", "my ", "our "]
-    first_person_count = sum(all_content_lower.count(fp) for fp in first_person)
+    # Check 7: First person usage (using word boundary regex for accuracy)
+    first_person = ["i", "we", "my", "our"]
+    first_person_count = sum(len(re.findall(rf'\b{word}\b', all_content_lower)) for word in first_person)
     
     if first_person_count <= 10:
         strengths.append("Appropriate use of first person")

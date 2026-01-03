@@ -14,10 +14,7 @@ from datetime import datetime, timezone
 
 from langgraph.types import interrupt
 
-from src.review.criteria import (
-    evaluate_paper,
-    EVALUATION_DIMENSIONS,
-)
+from src.review.criteria import evaluate_paper
 from src.state.models import (
     ReviewCritique,
     RevisionRequest,
@@ -212,10 +209,20 @@ def reviewer_node(state: WorkflowState) -> dict:
     )
     
     # ==========================================================================
+    # Create revision request if needed (before checking escalation)
+    # ==========================================================================
+    
+    revision_request = None
+    if decision == "revise":
+        # Create revision request first, before potentially escalating
+        pass  # Actual creation happens below
+    
+    # ==========================================================================
     # Handle revision limit
     # ==========================================================================
     
-    if decision == "revise" and revision_count >= max_revisions:
+    needs_revision = decision == "revise"
+    if needs_revision and revision_count >= max_revisions:
         logger.warning(
             f"REVIEWER: Max revisions ({max_revisions}) reached. "
             "Escalating for human decision."
@@ -227,11 +234,10 @@ def reviewer_node(state: WorkflowState) -> dict:
         )
     
     # ==========================================================================
-    # Create revision request if needed
+    # Create revision request if revision is needed (including escalation cases)
     # ==========================================================================
     
-    revision_request = None
-    if decision == "revise":
+    if needs_revision:
         # Determine which sections need revision
         sections_to_revise = list(set(item.section for item in critique_items if item.severity in ["critical", "major"]))
         
@@ -409,15 +415,15 @@ def _generate_paper_markdown(writer_output: dict) -> str:
     for section in sections:
         if isinstance(section, dict):
             section_type = section.get("section_type", "")
-            title = section.get("title", section_type.title())
+            section_title = section.get("title", section_type.title())
             content = section.get("content", "")
         else:
             section_type = getattr(section, "section_type", "")
-            title = getattr(section, "title", section_type.title())
+            section_title = getattr(section, "title", section_type.title())
             content = getattr(section, "content", "")
         
         if section_type != "references":
-            lines.append(f"## {title}")
+            lines.append(f"## {section_title}")
             lines.append("")
             lines.append(content)
             lines.append("")
@@ -454,7 +460,7 @@ def route_after_reviewer(state: WorkflowState) -> str:
     Route after REVIEWER node based on review decision.
     
     Returns:
-        - "output" if approved
+        - "output" if approved or escalated (human decides final outcome)
         - "writer" if revision needed (loops back)
         - "__end__" if rejected or error
     """
@@ -464,6 +470,9 @@ def route_after_reviewer(state: WorkflowState) -> str:
     logger.info(f"REVIEWER routing: decision={decision}, human_approved={human_approved}")
     
     if decision == "approve" and human_approved:
+        return "output"
+    elif decision == "escalate":
+        # Escalated to human - route to output where human makes final decision
         return "output"
     elif decision == "revise":
         return "writer"
