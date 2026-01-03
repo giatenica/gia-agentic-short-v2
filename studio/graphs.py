@@ -36,6 +36,8 @@ from src.nodes import (
     conceptual_synthesizer_node,
     route_after_conceptual_synthesizer,
     writer_node,
+    reviewer_node,
+    route_after_reviewer,
 )
 from src.cache import get_cache, get_cache_policy
 from src.config import settings
@@ -244,15 +246,94 @@ def route_after_analysis(state: WorkflowState) -> Literal["writer", "__end__"]:
     return END
 
 
+# =============================================================================
+# Writer to Reviewer Routing (Sprint 7)
+# =============================================================================
+
+
+def route_after_writer(state: WorkflowState) -> Literal["reviewer", "__end__"]:
+    """
+    Route from writer to reviewer.
+    
+    Proceeds to reviewer if:
+    - No errors in state
+    - Writer output exists
+    """
+    if state.get("errors"):
+        return END
+    
+    # Check for writer output
+    if state.get("writer_output"):
+        return "reviewer"
+    
+    return END
+
+
+def _route_after_reviewer(state: WorkflowState) -> Literal["writer", "output", "__end__"]:
+    """
+    Route after reviewer based on review decision.
+    
+    Routes to:
+    - "output" if approved by human
+    - "writer" if revision needed (loops back)
+    - END if rejected or error
+    """
+    decision = state.get("review_decision")
+    human_approved = state.get("human_approved", False)
+    
+    if decision == "approve" and human_approved:
+        return "output"
+    elif decision == "revise":
+        return "writer"
+    else:
+        return END
+
+
+def output_node(state: WorkflowState) -> dict:
+    """
+    Output node - final node that prepares the completed paper.
+    
+    This node:
+    1. Extracts the final paper from reviewer output
+    2. Logs completion status
+    3. Returns final state
+    """
+    import logging
+    from src.state.enums import ResearchStatus
+    
+    logger = logging.getLogger(__name__)
+    logger.info("OUTPUT: Preparing final paper output")
+    
+    reviewer_output = state.get("reviewer_output")
+    final_paper = None
+    
+    if reviewer_output:
+        if isinstance(reviewer_output, dict):
+            final_paper = reviewer_output.get("final_paper")
+        elif hasattr(reviewer_output, "final_paper"):
+            final_paper = reviewer_output.final_paper
+    
+    if final_paper:
+        logger.info(f"OUTPUT: Final paper ready ({len(final_paper)} characters)")
+    else:
+        logger.warning("OUTPUT: No final paper content available")
+    
+    return {
+        "status": ResearchStatus.COMPLETED,
+    }
+
+
 def create_research_workflow() -> StateGraph:
     """
     Create the main research workflow graph.
     
-    Current implementation (Sprints 1-6):
+    Current implementation (Sprints 1-7):
     INTAKE -> [if data] DATA_EXPLORER -> LITERATURE_REVIEWER -> LITERATURE_SYNTHESIZER 
         -> GAP_IDENTIFIER -> PLANNER
         -> [route by research type] -> DATA_ANALYST or CONCEPTUAL_SYNTHESIZER 
-        -> WRITER -> END
+        -> WRITER -> REVIEWER -> [approve] -> OUTPUT
+                         ↓
+                    [revise] -> WRITER (revision loop)
     
     The DATA_EXPLORER node analyzes uploaded data files:
     - Schema detection and summary statistics
@@ -346,6 +427,13 @@ def create_research_workflow() -> StateGraph:
         cache_policy=writer_policy
     )
     
+    # Add Sprint 7 nodes
+    # reviewer: No caching - has interrupt() for human approval
+    workflow.add_node("reviewer", reviewer_node)
+    
+    # output: No caching - final node
+    workflow.add_node("output", output_node)
+    
     # Add edges (Sprints 1-4)
     workflow.add_edge(START, "intake")
     workflow.add_conditional_edges(
@@ -393,8 +481,22 @@ def create_research_workflow() -> StateGraph:
         ["writer", END]
     )
     
-    # Sprint 6: WRITER leads to END
-    workflow.add_edge("writer", END)
+    # Sprint 7: WRITER routes to REVIEWER
+    workflow.add_conditional_edges(
+        "writer",
+        route_after_writer,
+        ["reviewer", END]
+    )
+    
+    # Sprint 7: REVIEWER routes to OUTPUT or back to WRITER (revision loop)
+    workflow.add_conditional_edges(
+        "reviewer",
+        _route_after_reviewer,
+        ["writer", "output", END]
+    )
+    
+    # Sprint 7: OUTPUT leads to END
+    workflow.add_edge("output", END)
     
     # Compile with cache backend (None if caching disabled)
     cache = get_cache()

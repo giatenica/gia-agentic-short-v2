@@ -30,6 +30,10 @@ from src.state.models import (
     PaperSection,
     ReferenceList,
     StyleViolation,
+    # Sprint 7 models
+    ReviewCritique,
+    RevisionRequest,
+    ReviewerOutput,
 )
 from src.state.enums import ResearchStatus
 
@@ -184,8 +188,36 @@ class WorkflowState(TypedDict, total=False):
     # Style violations collected during writing
     style_violations: list[StyleViolation]
     
-    # Critique from REVIEWER node
+    # Critique from REVIEWER node (legacy)
     critique: Critique | None
+    
+    # =========================================================================
+    # Sprint 7: Review Context (from REVIEWER)
+    # =========================================================================
+    
+    # Review critique from REVIEWER node
+    review_critique: ReviewCritique | dict[str, Any] | None
+    
+    # Review decision (approve, revise, reject)
+    review_decision: str | None
+    
+    # Revision request (if revision needed)
+    revision_request: RevisionRequest | dict[str, Any] | None
+    
+    # Reviewer output
+    reviewer_output: ReviewerOutput | dict[str, Any] | None
+    
+    # Number of revision cycles completed
+    revision_count: int
+    
+    # Maximum revision cycles allowed
+    max_revisions: int
+    
+    # Human approval status for final output
+    human_approved: bool
+    
+    # Human feedback on the review
+    human_feedback: str | None
     
     # =========================================================================
     # Workflow Metadata
@@ -291,6 +323,16 @@ def create_initial_state(
         "style_violations": [],
         "critique": None,
         
+        # Review (Sprint 7)
+        "review_critique": None,
+        "review_decision": None,
+        "revision_request": None,
+        "reviewer_output": None,
+        "revision_count": 0,
+        "max_revisions": 3,
+        "human_approved": False,
+        "human_feedback": None,
+        
         # Metadata
         "messages": [],
         "status": ResearchStatus.INTAKE_PENDING,
@@ -329,8 +371,8 @@ def validate_state_for_node(state: WorkflowState, node_name: str) -> tuple[bool,
         "data_analyst": ["research_plan", "data_exploration_results"],
         "conceptual_synthesizer": ["research_plan", "literature_synthesis"],
         "writer": ["analysis"],
-        "reviewer": ["draft"],
-        "output": ["draft", "critique"],
+        "reviewer": ["writer_output"],
+        "output": ["reviewer_output", "human_approved"],
     }
     
     node_requirements = required_fields.get(node_name, [])
