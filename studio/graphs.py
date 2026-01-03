@@ -31,6 +31,7 @@ from src.graphs.routers import (
     route_after_synthesizer,
     route_after_gap_identifier,
     route_after_planner,
+    route_after_data_acquisition,
     route_by_research_type,
     route_after_analysis,
     route_after_writer,

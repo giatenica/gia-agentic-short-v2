@@ -21,6 +21,7 @@ from src.nodes import (
     literature_synthesizer_node,
     gap_identifier_node,
     planner_node,
+    data_acquisition_node,
     data_analyst_node,
     conceptual_synthesizer_node,
     writer_node,
@@ -33,6 +34,7 @@ from src.graphs.routers import (
     route_after_synthesizer,
     route_after_gap_identifier,
     route_after_planner,
+    route_after_data_acquisition,
     route_after_analysis,
     route_after_writer,
     route_after_reviewer,
@@ -62,6 +64,7 @@ WORKFLOW_NODES = [
     "literature_synthesizer",
     "gap_identifier",
     "planner",
+    "data_acquisition",  # Sprint 14: External data fetching
     "data_analyst",
     "conceptual_synthesizer",
     "writer",
@@ -248,6 +251,9 @@ def create_research_workflow(
     # Sprint 4: Planner (no caching - has interrupt for human approval)
     workflow.add_node("planner", planner_node)
     
+    # Sprint 14: Data acquisition (no caching - fetches fresh external data)
+    workflow.add_node("data_acquisition", data_acquisition_node)
+    
     # Sprint 5: Data analyst (cache for 30 minutes - analysis expensive)
     if synthesis_policy:
         workflow.add_node("data_analyst", data_analyst_node, cache_policy=synthesis_policy)
@@ -317,10 +323,17 @@ def create_research_workflow(
         ["planner", "fallback", END]
     )
     
-    # Planner -> Data Analyst or Conceptual Synthesizer or Fallback (Sprint 5)
+    # Planner -> Data Acquisition or Conceptual Synthesizer or Fallback (Sprint 14)
     workflow.add_conditional_edges(
         "planner",
         route_after_planner,
+        ["data_acquisition", "conceptual_synthesizer", "fallback", END]
+    )
+    
+    # Data Acquisition -> Data Analyst or Conceptual Synthesizer or Fallback (Sprint 14)
+    workflow.add_conditional_edges(
+        "data_acquisition",
+        route_after_data_acquisition,
         ["data_analyst", "conceptual_synthesizer", "fallback", END]
     )
     
