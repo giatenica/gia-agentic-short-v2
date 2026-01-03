@@ -3017,6 +3017,30 @@ class TimeRange(BaseModel):
         default=None,
         description="Relative time specification (e.g., 'last 5 years')"
     )
+    
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def validate_date_format(cls, v: str | None) -> str | None:
+        """Ensure date strings follow YYYY-MM-DD format when provided."""
+        if v is None or v == "":
+            return v
+        if not isinstance(v, str):
+            raise ValueError("Date value must be a string in YYYY-MM-DD format")
+        try:
+            datetime.strptime(v, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("Date must be in YYYY-MM-DD format") from exc
+        return v
+    
+    @model_validator(mode="after")
+    def validate_date_order(self) -> "TimeRange":
+        """Ensure start_date is not after end_date when both are provided."""
+        if self.start_date and self.end_date:
+            start = datetime.strptime(self.start_date, "%Y-%m-%d").date()
+            end = datetime.strptime(self.end_date, "%Y-%m-%d").date()
+            if start > end:
+                raise ValueError("start_date must be on or before end_date")
+        return self
 
 
 class DataRequirement(BaseModel):

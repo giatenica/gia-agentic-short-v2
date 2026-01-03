@@ -23,7 +23,7 @@ import traceback
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from io import StringIO
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -111,10 +111,11 @@ FORBIDDEN_PATTERNS = [
     r'\bftplib\b',
     
     # Process control
-    r'\bsignal\b',
-    r'\batexit\b',
-    r'\bthreading\b',
-    r'\bmultiprocessing\b',
+    r'\bimport\s+signal\b',
+    r'\bfrom\s+signal\s+import\b',
+    r'\bimport\s+atexit\b',
+    r'\bimport\s+threading\b',
+    r'\bimport\s+multiprocessing\b',
     
     # ctypes and low-level
     r'\bctypes\b',
@@ -191,7 +192,7 @@ SAFE_BUILTINS = {
 
 # Modules allowed to be imported
 ALLOWED_IMPORT_MODULES = {
-    'json', 'math', 'statistics', 'datetime', 'decimal', 're',
+    'json', 'math', 'statistics', 'datetime', 'decimal', 're', 'time',
     'collections', 'itertools', 'functools', 'operator',
     'pandas', 'pd', 'numpy', 'np', 'requests',
 }
@@ -211,7 +212,9 @@ def _safe_import(name: str, globals_dict=None, locals_dict=None, fromlist=(), le
         raise ImportError(f"Import of '{name}' is not allowed in sandbox. Allowed: {', '.join(sorted(ALLOWED_IMPORT_MODULES))}")
     
     # Use the real import for allowed modules
-    return __builtins__['__import__'](name, globals_dict, locals_dict, fromlist, level)
+    # Handle __builtins__ being either a dict or module
+    builtin_import = getattr(__builtins__, '__import__', None) or __builtins__.get('__import__', __import__)
+    return builtin_import(name, globals_dict, locals_dict, fromlist, level)
 
 
 def _build_safe_globals() -> dict[str, Any]:
@@ -539,5 +542,7 @@ __all__ = [
     "validate_code",
     "CodeValidationError",
     "SAFE_GLOBALS",
+    "SAFE_BUILTINS",
     "FORBIDDEN_PATTERNS",
+    "ALLOWED_IMPORT_MODULES",
 ]

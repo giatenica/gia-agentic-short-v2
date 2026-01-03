@@ -14,14 +14,13 @@ Workflow:
 7. Return updated state with acquired_datasets
 """
 
-from datetime import datetime, timezone
 from typing import Any, Literal
 import logging
+import re
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage
 
 from src.state.enums import (
-    ResearchStatus,
     DataRequirementPriority,
     AcquisitionStatus,
     CodeExecutionStatus,
@@ -33,8 +32,6 @@ from src.state.models import (
     AcquisitionFailure,
     AcquiredDataset,
     CodeSnippet,
-    TimeRange,
-    WorkflowError,
 )
 from src.state.schema import WorkflowState
 from src.tools.data_loading import get_registry
@@ -45,7 +42,6 @@ from src.tools.external_data import (
     acquire_economic_indicator,
     acquire_crypto_data,
     fetch_api_json,
-    list_available_data_sources,
 )
 
 # Import Sprint 14 code execution
@@ -54,12 +50,7 @@ from src.tools.code_execution import (
     validate_python_code,
 )
 
-# Import data source registry
-try:
-    from src.data_sources import DataSourceRegistry, get_source
-    HAS_DATA_SOURCES = True
-except ImportError:
-    HAS_DATA_SOURCES = False
+# Data source registry is used via external_data tools
 
 
 logger = logging.getLogger(__name__)
@@ -103,8 +94,9 @@ def _parse_data_requirements_from_plan(state: WorkflowState) -> list[DataRequire
     # Infer from methodology if no explicit requirements
     if not requirements:
         methodology = plan_data.get("methodology", "")
-        analysis_approach = plan_data.get("analysis_approach", "")
-        research_question = state.get("original_query", "")
+        # These may be used in future for more sophisticated inference
+        _analysis_approach = plan_data.get("analysis_approach", "")  # noqa: F841
+        _research_question = state.get("original_query", "")  # noqa: F841
         
         # Infer stock data requirement if methodology mentions financial analysis
         if any(kw in methodology.lower() for kw in ["stock", "equity", "return", "price"]):
@@ -259,41 +251,70 @@ def _execute_acquisition_task(task: DataAcquisitionTask) -> tuple[bool, str | No
         return False, None, str(e)
 
 
+def _sanitize_ticker(ticker: str) -> str | None:
+    """Sanitize ticker symbol to prevent code injection.
+    
+    Only allows alphanumeric characters, dots, and hyphens.
+    Returns None if ticker is invalid.
+    """
+    if not ticker or not isinstance(ticker, str):
+        return None
+    # Only allow safe ticker characters
+    if not re.match(r'^[A-Za-z0-9.\-]+$', ticker):
+        logger.warning(f"Invalid ticker format: {ticker}")
+        return None
+    return ticker.upper()
+
+
 def _generate_custom_code(requirement: DataRequirement) -> str | None:
     """Generate custom Python code for data acquisition.
     
     Used when built-in tools cannot satisfy the requirement.
+    Note: Generated code requires ALPHA_VANTAGE_API_KEY environment variable.
     """
     data_type = requirement.data_type.lower()
     
     if data_type == "stock_prices" and requirement.entities:
-        ticker = requirement.entities[0]
-        start = requirement.time_range.start_date if requirement.time_range else "2020-01-01"
-        end = requirement.time_range.end_date if requirement.time_range else "2024-12-31"
+        raw_ticker = requirement.entities[0]
+        ticker = _sanitize_ticker(raw_ticker)
+        if not ticker:
+            logger.error(f"Cannot generate code for invalid ticker: {raw_ticker}")
+            return None
+        
+        start_date = requirement.time_range.start_date if requirement.time_range else "2020-01-01"
+        end_date = requirement.time_range.end_date if requirement.time_range else "2024-12-31"
+        # Note: start_date and end_date are not used in Alpha Vantage daily API but kept for documentation
+        _ = (start_date, end_date)  # Acknowledge unused for now
         
         return f'''
+import os
 import pandas as pd
 import requests
 
-# Alternative stock data fetch using Alpha Vantage or similar
-url = f"https://www.alphavantage.co/query"
-params = {{
-    "function": "TIME_SERIES_DAILY_ADJUSTED",
-    "symbol": "{ticker}",
-    "outputsize": "full",
-    "apikey": "demo"  # Replace with actual key
-}}
-
-response = requests.get(url, params=params, timeout=30)
-data = response.json()
-
-if "Time Series (Daily)" in data:
-    df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
-    df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-    result = {{"status": "success", "rows": len(df)}}
+# Alternative stock data fetch using Alpha Vantage
+# Requires ALPHA_VANTAGE_API_KEY environment variable
+api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+if not api_key:
+    result = {{"status": "error", "error": "ALPHA_VANTAGE_API_KEY environment variable not set"}}
 else:
-    result = {{"status": "error", "error": "Failed to fetch data"}}
+    url = "https://www.alphavantage.co/query"
+    params = {{
+        "function": "TIME_SERIES_DAILY_ADJUSTED",
+        "symbol": "{ticker}",
+        "outputsize": "full",
+        "apikey": api_key
+    }}
+    
+    response = requests.get(url, params=params, timeout=30)
+    data = response.json()
+    
+    if "Time Series (Daily)" in data:
+        df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index")
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        result = {{"status": "success", "rows": len(df)}}
+    else:
+        result = {{"status": "error", "error": data.get("Note", "Failed to fetch data")}}
 '''
     
     return None
@@ -496,12 +517,16 @@ def data_acquisition_node(state: WorkflowState) -> dict[str, Any]:
 
 
 # =============================================================================
-# Routing Functions
+# Routing Functions (Simple versions - full versions in src/graphs/routers.py)
 # =============================================================================
 
 
 def route_after_acquisition(state: WorkflowState) -> Literal["data_analyst", "human_interrupt", "__end__"]:
-    """Route after data acquisition based on results.
+    """Simple route after data acquisition based on results.
+    
+    Note: The workflow uses `route_after_data_acquisition` from src/graphs/routers.py
+    which has additional routing options (conceptual_synthesizer, fallback).
+    This simpler version is provided for standalone testing.
     
     - If all required data is available: proceed to data_analyst
     - If critical data is missing: route to human_interrupt

@@ -4,17 +4,15 @@ Tests the intelligent data acquisition functionality.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 from src.state.enums import (
     DataRequirementPriority,
     AcquisitionStatus,
-    CodeExecutionStatus,
     ResearchStatus,
 )
 from src.state.models import (
     DataRequirement,
-    DataAcquisitionPlan,
     DataAcquisitionTask,
     AcquisitionFailure,
     AcquiredDataset,
