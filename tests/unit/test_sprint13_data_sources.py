@@ -8,8 +8,7 @@ Tests the new functionality introduced in Sprint 13:
 """
 
 import pytest
-from datetime import datetime
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 from importlib.util import find_spec
 
 # Check optional dependencies
@@ -20,7 +19,6 @@ HAS_REQUESTS = find_spec("requests") is not None
 
 if HAS_PANDAS:
     import pandas as pd
-    import numpy as np
 
 
 # =============================================================================

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar
 import logging
 
@@ -92,8 +92,8 @@ class RateLimitTracker:
     rate_limit: RateLimit
     minute_requests: int = 0
     day_requests: int = 0
-    minute_reset: datetime = field(default_factory=datetime.now)
-    day_reset: datetime = field(default_factory=datetime.now)
+    minute_reset: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    day_reset: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def can_request(self) -> bool:
         """Check if a request can be made within rate limits."""
@@ -124,17 +124,17 @@ class RateLimitTracker:
         
         if self.rate_limit.requests_per_minute > 0:
             if self.minute_requests >= self.rate_limit.requests_per_minute:
-                return int((self.minute_reset + timedelta(minutes=1) - datetime.now()).total_seconds())
+                return int((self.minute_reset + timedelta(minutes=1) - datetime.now(timezone.utc)).total_seconds())
         
         if self.rate_limit.requests_per_day > 0:
             if self.day_requests >= self.rate_limit.requests_per_day:
-                return int((self.day_reset + timedelta(days=1) - datetime.now()).total_seconds())
+                return int((self.day_reset + timedelta(days=1) - datetime.now(timezone.utc)).total_seconds())
         
         return 0
     
     def _reset_if_needed(self) -> None:
         """Reset counters if time windows have passed."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         if now - self.minute_reset > timedelta(minutes=1):
             self.minute_requests = 0

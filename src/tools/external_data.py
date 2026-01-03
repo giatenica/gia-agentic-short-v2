@@ -8,14 +8,13 @@ a consistent interface for the data acquisition agent.
 """
 
 from typing import Any, Literal
-from datetime import datetime, date
 import logging
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 try:
-    import pandas as pd
+    import pandas as pd  # noqa: F401 - Used for HAS_PANDAS check
     HAS_PANDAS = True
 except ImportError:
     HAS_PANDAS = False
@@ -133,7 +132,7 @@ def acquire_stock_data(
         acquire_stock_data("AAPL", "2020-01-01", "2024-12-31")
     """
     if not HAS_PANDAS:
-        return {"error": "pandas is required but not installed"}
+        return {"status": "error", "error": "pandas is required but not installed"}
     
     try:
         from src.data_sources import get_source
@@ -141,7 +140,7 @@ def acquire_stock_data(
         
         source = get_source("yfinance")
         if not source:
-            return {"error": "YFinance data source not available"}
+            return {"status": "error", "error": "YFinance data source not available"}
         
         # Build params
         params = {
@@ -254,7 +253,7 @@ def acquire_economic_indicator(
         https://fred.stlouisfed.org/docs/api/api_key.html
     """
     if not HAS_PANDAS:
-        return {"error": "pandas is required but not installed"}
+        return {"status": "error", "error": "pandas is required but not installed"}
     
     try:
         from src.data_sources import get_source
@@ -266,7 +265,7 @@ def acquire_economic_indicator(
         
         source = get_source("fred")
         if not source:
-            return {"error": "FRED data source not available"}
+            return {"status": "error", "error": "FRED data source not available"}
         
         # Build params
         params = {"series_id": indicator}
@@ -370,7 +369,7 @@ def acquire_crypto_data(
         Summary of acquired data
     """
     if not HAS_PANDAS:
-        return {"error": "pandas is required but not installed"}
+        return {"status": "error", "error": "pandas is required but not installed"}
     
     try:
         from src.data_sources import get_source
@@ -378,7 +377,7 @@ def acquire_crypto_data(
         
         source = get_source("coingecko")
         if not source:
-            return {"error": "CoinGecko data source not available"}
+            return {"status": "error", "error": "CoinGecko data source not available"}
         
         # Fetch data
         df = source.fetch(
@@ -466,7 +465,7 @@ def fetch_api_json(
         - Response size is limited
     """
     if not HAS_REQUESTS:
-        return {"error": "requests library not installed"}
+        return {"status": "error", "error": "requests library not installed"}
     
     # Security: Only allow HTTPS
     if not url.startswith("https://"):

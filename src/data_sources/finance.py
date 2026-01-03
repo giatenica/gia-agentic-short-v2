@@ -8,9 +8,8 @@ Provides data sources for financial data including:
 
 from __future__ import annotations
 
-from datetime import datetime, date
-from typing import Any, ClassVar, Literal
-import logging
+from datetime import datetime, date, timezone
+from typing import Any, ClassVar
 
 try:
     import pandas as pd
@@ -38,7 +37,6 @@ except ImportError:
 
 from src.data_sources.base import (
     DataSource,
-    DataSourceRegistry,
     RateLimit,
     DataSourceError,
     RateLimitError,
@@ -183,7 +181,7 @@ class YFinanceSource(DataSource):
                 if not start:
                     start = "2019-01-01"
                 if not end:
-                    end = datetime.now().strftime("%Y-%m-%d")
+                    end = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 df = t.history(start=start, end=end, interval=interval)
             
             if df.empty:
