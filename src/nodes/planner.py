@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
+from langgraph.errors import GraphInterrupt
 
 from src.config import settings
 from src.state.enums import (
@@ -347,6 +348,10 @@ def planner_node(state: WorkflowState) -> dict[str, Any]:
             "messages": [summary_message],
             "status": ResearchStatus.PLANNING_COMPLETE if approved_plan.approval_status == PlanApprovalStatus.APPROVED else ResearchStatus.PLANNING,
         }
+    
+    except GraphInterrupt:
+        # Re-raise GraphInterrupt - this is expected HITL behavior, not an error
+        raise
         
     except Exception as e:
         error = WorkflowError(

@@ -48,19 +48,21 @@ class DataRegistry:
     
     Uses DuckDB as the unified backend for storage and querying.
     Datasets are registered by name and can be queried via SQL.
+    
+    Implements a proper singleton pattern to ensure data persists
+    across all tool calls within the same process.
     """
     
-    _instance = None
-    _db_path: str | None = None
-    _conn: Any = None
-    _datasets: dict[str, dict[str, Any]] = {}
+    _instance: "DataRegistry | None" = None
     
-    def __new__(cls):
+    def __new__(cls) -> "DataRegistry":
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._datasets = {}
-            cls._db_path = None
-            cls._conn = None
+            instance = super().__new__(cls)
+            # Initialize instance attributes (not class attributes)
+            instance._db_path: str | None = None
+            instance._conn: Any = None
+            instance._datasets: dict[str, dict[str, Any]] = {}
+            cls._instance = instance
         return cls._instance
     
     def _get_connection(self) -> Any:
@@ -119,6 +121,10 @@ class DataRegistry:
         conn = self._get_connection()
         return conn.execute(f'SELECT * FROM "{name}"').fetchdf()
     
+    def get_dataframe(self, name: str) -> "pd.DataFrame | None":
+        """Alias for get() - returns registered DataFrame by name."""
+        return self.get(name)
+    
     def query(self, sql: str) -> "pd.DataFrame":
         """Execute SQL query against registered datasets."""
         conn = self._get_connection()
@@ -131,6 +137,11 @@ class DataRegistry:
     def get_info(self, name: str) -> dict[str, Any] | None:
         """Get metadata for a registered dataset."""
         return self._datasets.get(name)
+    
+    @property
+    def datasets(self) -> dict[str, dict[str, Any]]:
+        """Public accessor for registered datasets."""
+        return self._datasets
     
     def clear(self) -> None:
         """Clear all registered datasets."""

@@ -126,10 +126,34 @@ def _extract_concepts_from_synthesis(
     """Extract and define concepts from literature synthesis."""
     concepts = []
     
+    def _clean_concept_name(raw_name: str, fallback: str) -> str:
+        """Clean and truncate concept name to fit within 100 char limit."""
+        # Remove markdown formatting
+        name = raw_name.strip()
+        name = name.lstrip("-*# ").rstrip("*")
+        # Remove bold/italic markers
+        name = name.replace("**", "").replace("__", "")
+        # Take first sentence or phrase if too long
+        if len(name) > 95:
+            # Try to cut at a reasonable point
+            for sep in [":", ".", ",", " - "]:
+                if sep in name[:95]:
+                    idx = name[:95].index(sep)
+                    name = name[:idx]
+                    break
+            else:
+                name = name[:95]
+        # Fallback if too short or contains no alphanumeric characters
+        cleaned = name.strip()
+        if len(cleaned) < 2 or not any(ch.isalnum() for ch in cleaned):
+            return fallback
+        return cleaned
+    
     # Extract from theoretical frameworks
     frameworks = synthesis.get("theoretical_frameworks", [])
     for i, fw in enumerate(frameworks[:3]):  # Top 3 frameworks
-        name = fw if isinstance(fw, str) else f"Framework {i+1}"
+        raw_name = fw if isinstance(fw, str) else f"Framework {i+1}"
+        name = _clean_concept_name(raw_name, f"Framework_{i+1}")
         concepts.append(
             Concept(
                 name=name,
