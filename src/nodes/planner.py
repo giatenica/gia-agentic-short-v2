@@ -350,7 +350,7 @@ def planner_node(state: WorkflowState) -> dict[str, Any]:
         
     except Exception as e:
         error = WorkflowError(
-            error_type="planner_error",
+            category="planner_error",
             message=f"Error in PLANNER node: {str(e)}",
             node="planner",
             recoverable=True,
