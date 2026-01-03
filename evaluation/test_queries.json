@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "description": "Test queries for GIA research workflow evaluation",
+  "created_at": "2026-01-03",
+  "queries": [
+    {
+      "id": "eval_001",
+      "query": "What factors influence cryptocurrency adoption among retail investors?",
+      "research_type": "empirical",
+      "expected_themes": ["cryptocurrency", "retail investors", "adoption", "blockchain"],
+      "expected_methodology": ["survey", "regression", "panel data"],
+      "complexity": "medium",
+      "domain": "finance"
+    },
+    {
+      "id": "eval_002",
+      "query": "How do ESG factors affect corporate bond spreads?",
+      "research_type": "empirical",
+      "expected_themes": ["ESG", "corporate bonds", "credit spreads", "sustainable finance"],
+      "expected_methodology": ["panel regression", "fixed effects"],
+      "complexity": "medium",
+      "domain": "finance"
+    },
+    {
+      "id": "eval_003",
+      "query": "What is the theoretical framework for understanding digital transformation in banking?",
+      "research_type": "theoretical",
+      "expected_themes": ["digital transformation", "banking", "fintech", "framework"],
+      "expected_methodology": ["literature review", "theory building"],
+      "complexity": "medium",
+      "domain": "finance"
+    },
+    {
+      "id": "eval_004",
+      "query": "Does algorithmic trading improve market efficiency?",
+      "research_type": "empirical",
+      "expected_themes": ["algorithmic trading", "market efficiency", "high-frequency trading", "liquidity"],
+      "expected_methodology": ["event study", "regression analysis"],
+      "complexity": "high",
+      "domain": "finance"
+    },
+    {
+      "id": "eval_005",
+      "query": "How does CEO overconfidence affect merger and acquisition decisions?",
+      "research_type": "empirical",
+      "expected_themes": ["CEO behavior", "overconfidence", "M&A", "corporate decisions"],
+      "expected_methodology": ["event study", "panel data", "probit/logit"],
+      "complexity": "high",
+      "domain": "corporate finance"
+    },
+    {
+      "id": "eval_006",
+      "query": "What determines the pricing of initial public offerings?",
+      "research_type": "empirical",
+      "expected_themes": ["IPO", "underpricing", "valuation", "information asymmetry"],
+      "expected_methodology": ["cross-sectional regression", "event study"],
+      "complexity": "medium",
+      "domain": "corporate finance"
+    },
+    {
+      "id": "eval_007",
+      "query": "How do monetary policy announcements affect stock market volatility?",
+      "research_type": "empirical",
+      "expected_themes": ["monetary policy", "Federal Reserve", "stock volatility", "interest rates"],
+      "expected_methodology": ["event study", "GARCH", "VAR"],
+      "complexity": "high",
+      "domain": "macrofinance"
+    },
+    {
+      "id": "eval_008",
+      "query": "What role does financial literacy play in retirement savings decisions?",
+      "research_type": "empirical",
+      "expected_themes": ["financial literacy", "retirement", "savings", "household finance"],
+      "expected_methodology": ["survey analysis", "regression", "instrumental variables"],
+      "complexity": "medium",
+      "domain": "household finance"
+    },
+    {
+      "id": "eval_009",
+      "query": "How do climate risks affect bank lending decisions?",
+      "research_type": "empirical",
+      "expected_themes": ["climate risk", "bank lending", "credit risk", "environmental finance"],
+      "expected_methodology": ["difference-in-differences", "panel regression"],
+      "complexity": "high",
+      "domain": "banking"
+    },
+    {
+      "id": "eval_010",
+      "query": "What is the impact of artificial intelligence on financial advisory services?",
+      "research_type": "empirical",
+      "expected_themes": ["artificial intelligence", "robo-advisors", "financial advice", "wealth management"],
+      "expected_methodology": ["natural experiment", "regression discontinuity"],
+      "complexity": "medium",
+      "domain": "fintech"
+    }
+  ]
+}

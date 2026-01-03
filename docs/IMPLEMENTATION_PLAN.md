@@ -1716,6 +1716,7 @@ src/errors/
    - Identify bottlenecks
    - Optimize prompt lengths
    - Add caching where appropriate
+6. **Check against initial architecture** stored in langgraph_architecture_spec.md
 
 #### Acceptance Criteria
 - [ ] README reflects v2 architecture
