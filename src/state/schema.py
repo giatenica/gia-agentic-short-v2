@@ -14,6 +14,7 @@ from typing_extensions import TypedDict
 
 from src.state.models import (
     DataExplorationResult,
+    DataExplorationSummary,
     DataFile,
     ResearchPlan,
     SearchResult,
@@ -98,6 +99,9 @@ class WorkflowState(TypedDict, total=False):
     
     # Results from DATA_EXPLORER node
     data_exploration_results: DataExplorationResult | None
+    
+    # Sprint 12: Enhanced data exploration summary with LLM-generated prose
+    data_exploration_summary: DataExplorationSummary | None
     
     # User-specified key variables
     key_variables: list[str]
@@ -288,6 +292,7 @@ def create_initial_state(
         "loaded_datasets": [],
         "data_context": None,
         "data_exploration_results": None,
+        "data_exploration_summary": None,  # Sprint 12: LLM-generated data summary
         "key_variables": [],
         
         # Research

@@ -407,3 +407,65 @@ class RevisionPriority(str, Enum):
     HIGH = "high"            # Strongly recommended
     MEDIUM = "medium"        # Should address
     LOW = "low"              # Nice to have
+
+
+# =============================================================================
+# Sprint 12: Enhanced Data Explorer Enums
+# =============================================================================
+
+
+class QualityFlag(str, Enum):
+    """Data quality flags for data exploration.
+    
+    These flags indicate specific issues detected during data profiling
+    that may affect analysis or require user attention.
+    """
+    
+    # Missing data issues
+    MISSING_VALUES = "missing_values"              # Significant missing data detected
+    HIGH_MISSING_RATE = "high_missing_rate"        # >20% missing in one or more columns
+    
+    # File/format issues
+    UNREADABLE_FILE = "unreadable_file"            # File could not be parsed
+    ENCODING_ERROR = "encoding_error"              # Character encoding issues
+    MALFORMED_FILE = "malformed_file"              # Structural issues with file
+    UNSUPPORTED_FORMAT = "unsupported_format"      # File format not supported
+    
+    # Schema issues
+    SCHEMA_MISMATCH = "schema_mismatch"            # Inconsistent schema across files
+    DUPLICATE_COLUMNS = "duplicate_columns"        # Duplicate column names
+    
+    # Date/time issues
+    DATE_PARSING_FAILED = "date_parsing_failed"    # Could not parse date columns
+    INCONSISTENT_DATES = "inconsistent_dates"      # Mixed date formats
+    FUTURE_DATES = "future_dates"                  # Dates in the future detected
+    
+    # Data quality issues
+    LOW_SAMPLE_SIZE = "low_sample_size"            # Fewer than 30 observations
+    HIGH_CARDINALITY = "high_cardinality"          # Categorical with too many unique values
+    CONSTANT_COLUMN = "constant_column"            # Column has single value
+    ALL_NULL_COLUMN = "all_null_column"            # Column is entirely null
+    DUPLICATE_ROWS = "duplicate_rows"              # Significant duplicate rows
+    
+    # Statistical issues
+    OUTLIERS_DETECTED = "outliers_detected"        # Extreme values detected
+    HIGHLY_SKEWED = "highly_skewed"                # Distribution highly non-normal
+    MULTICOLLINEARITY = "multicollinearity"        # High correlation between variables
+    
+    # Panel/time series specific
+    UNBALANCED_PANEL = "unbalanced_panel"          # Panel data not balanced
+    GAPS_IN_TIME_SERIES = "gaps_in_time_series"    # Missing time periods
+    
+    # General
+    OTHER = "other"                                # Other quality issue
+
+
+class DataStructureType(str, Enum):
+    """Detected structure of the dataset."""
+    
+    CROSS_SECTIONAL = "cross_sectional"    # Single point in time, multiple entities
+    TIME_SERIES = "time_series"            # Single entity over time
+    PANEL = "panel"                        # Multiple entities over time (longitudinal)
+    POOLED = "pooled"                      # Pooled cross-sections
+    HIERARCHICAL = "hierarchical"          # Nested/multilevel structure
+    UNKNOWN = "unknown"                    # Structure could not be determined
