@@ -55,8 +55,8 @@ Thumbs.db
 data/
 *.db
 
-# Generated docs (keep markdown docs)
-!docs/*.md
+# Generated docs 
+!docs/
 
 # Local state exports (LangGraph Studio)
 docs/state.json
