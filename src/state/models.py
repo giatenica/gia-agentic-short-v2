@@ -2714,6 +2714,29 @@ class SectionWritingContext(BaseModel):
         description="LLM-generated prose description of the data"
     )
 
+    # Sprint 7+: Revision context (from REVIEWER)
+    is_revision: bool = Field(
+        default=False,
+        description="Whether this section is being written as a revision"
+    )
+    revision_iteration: int | None = Field(
+        default=None,
+        ge=1,
+        description="Revision iteration count if revising"
+    )
+    revision_instructions: str = Field(
+        default="",
+        description="Overall revision instructions from reviewer"
+    )
+    critique_for_section: str = Field(
+        default="",
+        description="Section-specific critique items to address"
+    )
+    human_feedback: str = Field(
+        default="",
+        description="Optional human feedback to incorporate"
+    )
+
 
 # Word count targets for different paper types and sections
 SECTION_WORD_COUNTS = {

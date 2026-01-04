@@ -107,6 +107,10 @@ class WorkflowState(TypedDict, total=False):
     
     # Results from DATA_EXPLORER node
     data_exploration_results: DataExplorationResult | None
+
+    # Additional exploration artifacts (non-canonical but used by nodes)
+    all_exploration_results: list[DataExplorationResult] | None
+    variable_mappings: list[dict[str, Any]] | None
     
     # Sprint 12: Enhanced data exploration summary with LLM-generated prose
     data_exploration_summary: DataExplorationSummary | None
@@ -174,6 +178,10 @@ class WorkflowState(TypedDict, total=False):
     
     # Analysis results from DATA_ANALYST or CONCEPTUAL_SYNTHESIZER
     analysis: AnalysisResult | None
+
+    # Legacy analysis keys used for routing/backward compatibility
+    data_analyst_output: dict[str, Any] | None
+    conceptual_synthesis_output: dict[str, Any] | None
     
     # Evidence registry for claim tracking
     evidence_items: list[EvidenceItem]
@@ -256,6 +264,14 @@ class WorkflowState(TypedDict, total=False):
     
     # Generated figure artifacts (time series, scatter, distributions)
     figures: list[FigureArtifact]
+
+    # =========================================================================
+    # Fallback Output (graceful degradation)
+    # =========================================================================
+
+    fallback_report: dict[str, Any] | None
+    final_paper: str | None
+    _fallback_activated: bool
     
     # =========================================================================
     # Workflow Metadata
@@ -327,6 +343,8 @@ def create_initial_state(
         "data_context": None,
         "data_exploration_results": None,
         "data_exploration_summary": None,  # Sprint 12: LLM-generated data summary
+        "all_exploration_results": None,
+        "variable_mappings": None,
         "key_variables": [],
         
         # Research
@@ -351,6 +369,8 @@ def create_initial_state(
         # Search/Analysis
         "search_results": [],
         "analysis": None,
+        "data_analyst_output": None,
+        "conceptual_synthesis_output": None,
         "evidence_items": [],
         
         # Draft
@@ -371,6 +391,21 @@ def create_initial_state(
         "max_revisions": 3,
         "human_approved": False,
         "human_feedback": None,
+
+        # Sprint 14: Data acquisition
+        "data_acquisition_plan": None,
+        "acquired_datasets": [],
+        "acquisition_failures": [],
+        "generated_code_snippets": [],
+
+        # Sprint 15: Tables/Figures
+        "tables": [],
+        "figures": [],
+
+        # Fallback
+        "fallback_report": None,
+        "final_paper": None,
+        "_fallback_activated": False,
         
         # Metadata
         "messages": [],
@@ -405,11 +440,14 @@ def validate_state_for_node(state: WorkflowState, node_name: str) -> tuple[bool,
         "intake": ["form_data"],
         "data_explorer": ["uploaded_data"],
         "literature_reviewer": ["original_query"],
-        "gap_identifier": ["literature_synthesis"],
-        "planner": ["original_query", "identified_gaps"],
+        # GAP_IDENTIFIER can synthesize minimally from search_results
+        "gap_identifier": ["original_query"],
+        # PLANNER can proceed as long as it has a research question
+        "planner": ["original_query"],
         "data_analyst": ["research_plan", "data_exploration_results"],
-        "conceptual_synthesizer": ["research_plan", "literature_synthesis"],
-        "writer": ["analysis"],
+        "conceptual_synthesizer": ["literature_synthesis"],
+        # WRITER can proceed with canonical analysis or legacy data_analyst_output
+        "writer": ["writer_input"],
         "reviewer": ["writer_output"],
         "output": ["reviewer_output", "human_approved"],
     }
@@ -418,6 +456,13 @@ def validate_state_for_node(state: WorkflowState, node_name: str) -> tuple[bool,
     missing = []
     
     for field in node_requirements:
+        if field == "writer_input":
+            has_analysis = bool(state.get("analysis"))
+            has_legacy = bool(state.get("data_analyst_output")) or bool(state.get("conceptual_synthesis_output"))
+            if not (has_analysis or has_legacy):
+                missing.append("analysis")
+            continue
+
         value = state.get(field)
         if value is None or (isinstance(value, (list, dict, str)) and not value):
             missing.append(field)

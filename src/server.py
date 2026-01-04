@@ -268,10 +268,11 @@ def get_state(project_folder):
 
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5001))
     print("\n" + "=" * 60)
     print("GIA Research Intake Form Server")
     print("=" * 60)
-    print(f"\n📝 Open: http://127.0.0.1:5000")
+    print(f"\n📝 Open: http://127.0.0.1:{port}")
     print(f"📁 Uploads: {UPLOAD_DIR}")
     print("\nPress Ctrl+C to stop\n")
-    app.run(debug=True, port=5000, host="0.0.0.0")
+    app.run(debug=True, port=port, host="0.0.0.0")

@@ -47,6 +47,10 @@ class Settings:
     cache_ttl_gap_analysis: int = int(os.getenv("CACHE_TTL_GAP_ANALYSIS", "1800"))  # 30 minutes
     cache_ttl_writer: int = int(os.getenv("CACHE_TTL_WRITER", "600"))  # 10 minutes
 
+    # Output artifacts
+    # Where to write exported tables/figures and compiled LaTeX PDFs.
+    output_dir: str = os.getenv("OUTPUT_DIR", str(PROJECT_ROOT / "data" / "outputs"))
+
     def __post_init__(self):
         """Configure LangSmith environment variables."""
         if self.langsmith_api_key:

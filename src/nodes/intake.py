@@ -398,10 +398,10 @@ def route_after_intake(state: WorkflowState) -> str:
     """
     # Check for errors first
     if state.get("status") == ResearchStatus.FAILED:
-        return "end"
+        return "__end__"
     
     if state.get("status") == ResearchStatus.INTAKE_PENDING:
-        return "end"  # Need to fix validation errors
+        return "__end__"  # Need to fix validation errors
     
     # Route based on data presence
     if state.get("uploaded_data"):

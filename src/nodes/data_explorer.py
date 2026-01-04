@@ -734,7 +734,7 @@ def route_after_data_explorer(state: WorkflowState) -> str:
     Route after DATA_EXPLORER node based on state.
     
     Routes to:
-    - "end" if data quality issues prevent analysis
+    - "__end__" if data quality issues prevent analysis
     - "literature_reviewer" otherwise
     
     Args:
@@ -746,7 +746,7 @@ def route_after_data_explorer(state: WorkflowState) -> str:
     status = state.get("status")
     
     if status == ResearchStatus.FAILED:
-        return "end"
+        return "__end__"
     
     if status == ResearchStatus.DATA_QUALITY_ISSUES:
         # Could route to HITL for confirmation

@@ -426,10 +426,13 @@ def route_after_analysis(state: WorkflowState) -> Literal["writer", "fallback", 
         return "__end__"
     
     # Check for analysis completion
+    # Canonical analysis output used across both analysis branches
+    has_analysis = state.get("analysis") is not None
+    # Legacy keys (kept for backward compatibility)
     has_data_analysis = state.get("data_analyst_output") is not None
     has_conceptual_synthesis = state.get("conceptual_synthesis_output") is not None
-    
-    if has_data_analysis or has_conceptual_synthesis:
+
+    if has_analysis or has_data_analysis or has_conceptual_synthesis:
         return "writer"
     
     return "__end__"

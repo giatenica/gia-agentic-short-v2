@@ -57,3 +57,7 @@ data/
 
 # Generated docs (keep markdown docs)
 !docs/*.md
+
+# Local state exports (LangGraph Studio)
+docs/state.json
+docs/minimal_state.json

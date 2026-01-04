@@ -5,6 +5,7 @@ academic research workflow graph with all nodes properly wired.
 """
 
 import logging
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,6 +43,9 @@ from src.graphs.routers import (
 from src.nodes.fallback import fallback_node
 from src.cache import get_cache, get_cache_policy
 from src.config import settings
+from src.output.latex import build_and_compile
+from src.tools.visualization import export_all_artifacts
+from src.state.models import WorkflowError
 
 logger = logging.getLogger(__name__)
 
@@ -124,21 +128,125 @@ def output_node(state: WorkflowState) -> dict:
     logger.info("OUTPUT: Preparing final paper output")
     
     reviewer_output = state.get("reviewer_output")
+    writer_output = state.get("writer_output")
+    completed_sections = state.get("completed_sections") or []
+
+    paper_title = None
+    run_id = None
+    if isinstance(writer_output, dict):
+        paper_title = (writer_output.get("title") or "").strip() or None
+        arg_thread = writer_output.get("argument_thread")
+        if isinstance(arg_thread, dict):
+            run_id = (arg_thread.get("thread_id") or "").strip() or None
+
+    if not paper_title:
+        paper_title = "Untitled Paper"
+    if not run_id:
+        run_id = "run"
+
+    tables = state.get("tables") or []
+    figures = state.get("figures") or []
+
+    output_base = Path(settings.output_dir)
+    output_base.mkdir(parents=True, exist_ok=True)
+    artifacts_dir = output_base / "_tmp_artifacts" / run_id
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    exported_files: list[str] = []
+    try:
+        export_result = export_all_artifacts.invoke(
+            {
+                "output_dir": str(artifacts_dir),
+                "tables": tables,
+                "figures": figures,
+            }
+        )
+        if isinstance(export_result, dict) and export_result.get("status") == "success":
+            exported_files = export_result.get("exported_files", []) or []
+    except Exception as e:
+        logger.warning("OUTPUT: Failed to export artifacts: %s", e)
+
+    # Prefer writer sections; reviewer_output.final_paper is treated as a narrative artifact.
+    if not isinstance(completed_sections, list) or not completed_sections:
+        if isinstance(writer_output, dict):
+            sections = writer_output.get("sections") or []
+            if isinstance(sections, list):
+                completed_sections = sections
+
+    build_result = build_and_compile(
+        base_output_dir=str(output_base),
+        run_id=run_id,
+        title=paper_title,
+        author="Gia Tenica",
+        sections=[s if isinstance(s, dict) else getattr(s, "model_dump", lambda: {})() for s in completed_sections],
+        tables=[t if isinstance(t, dict) else getattr(t, "model_dump", lambda: {})() for t in tables],
+        figures=[f if isinstance(f, dict) else getattr(f, "model_dump", lambda: {})() for f in figures],
+        exported_files=exported_files,
+    )
+
+    # Move exported artifacts into the build directory so LaTeX \input / \includegraphics works.
+    final_artifacts_dir = Path(build_result.output_dir) / "artifacts"
+    final_artifacts_dir.mkdir(parents=True, exist_ok=True)
+    moved_exports: list[str] = []
+    for p in exported_files:
+        try:
+            src = Path(p)
+            if src.exists():
+                dest = final_artifacts_dir / src.name
+                dest.write_bytes(src.read_bytes())
+                moved_exports.append(str(dest))
+        except Exception:
+            continue
+
+    errors = state.get("errors") or []
+    if not build_result.engine:
+        errors = list(errors) + [
+            WorkflowError(
+                node="output",
+                category="dependency",
+                message="No LaTeX engine found. Install 'tectonic' or 'latexmk' to compile PDF.",
+                recoverable=True,
+                details={"output_dir": build_result.output_dir, "tex_path": build_result.tex_path},
+            )
+        ]
+    elif not build_result.pdf_path:
+        errors = list(errors) + [
+            WorkflowError(
+                node="output",
+                category="latex",
+                message="LaTeX compilation failed. See compilation logs in state.",
+                recoverable=True,
+                details={
+                    "engine": build_result.engine,
+                    "output_dir": build_result.output_dir,
+                    "tex_path": build_result.tex_path,
+                },
+            )
+        ]
+
+    if build_result.pdf_path:
+        logger.info("OUTPUT: PDF generated at %s", build_result.pdf_path)
+    else:
+        logger.warning("OUTPUT: PDF not generated; LaTeX source saved at %s", build_result.tex_path)
+
     final_paper = None
-    
     if reviewer_output:
         if isinstance(reviewer_output, dict):
             final_paper = reviewer_output.get("final_paper")
         elif hasattr(reviewer_output, "final_paper"):
             final_paper = reviewer_output.final_paper
-    
-    if final_paper:
-        logger.info(f"OUTPUT: Final paper ready ({len(final_paper)} characters)")
-    else:
-        logger.warning("OUTPUT: No final paper content available")
-    
+
     return {
         "status": ResearchStatus.COMPLETED,
+        "errors": errors,
+        "final_paper": final_paper,
+        "output_dir": build_result.output_dir,
+        "latex_tex_path": build_result.tex_path,
+        "latex_pdf_path": build_result.pdf_path,
+        "exported_artifacts": moved_exports,
+        "latex_engine": build_result.engine,
+        "latex_compile_stdout": build_result.compilation_stdout,
+        "latex_compile_stderr": build_result.compilation_stderr,
     }
 
 
@@ -384,11 +492,9 @@ def create_research_workflow(
     if config.store:
         compile_kwargs["store"] = config.store
     
-    if config.interrupt_before:
-        compile_kwargs["interrupt_before"] = config.interrupt_before
-    
-    if config.interrupt_after:
-        compile_kwargs["interrupt_after"] = config.interrupt_after
+    # Explicitly set interrupts (empty list = no interrupts = auto-approve)
+    compile_kwargs["interrupt_before"] = config.interrupt_before or []
+    compile_kwargs["interrupt_after"] = config.interrupt_after or []
     
     # Add cache if enabled and configured
     if config.enable_caching:
