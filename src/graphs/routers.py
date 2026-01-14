@@ -55,10 +55,7 @@ def _should_fallback(state: WorkflowState) -> bool:
         return True
     
     # Check for unrecoverable errors
-    unrecoverable_count = sum(
-        1 for e in errors
-        if not getattr(e, 'recoverable', True)
-    )
+    unrecoverable_count = sum(1 for e in errors if not _is_recoverable_error(e))
     if unrecoverable_count >= 1:
         return True
     
@@ -67,6 +64,23 @@ def _should_fallback(state: WorkflowState) -> bool:
         return True
     
     return False
+
+
+def _is_recoverable_error(error: object) -> bool:
+    """Return True if an error is recoverable.
+
+    Errors in WorkflowState may be stored as dicts (serialized) or as rich
+    objects (e.g., WorkflowError). Routing should treat both consistently.
+    """
+    if isinstance(error, dict):
+        return bool(error.get("recoverable", True))
+    return bool(getattr(error, "recoverable", True))
+
+
+def _has_fatal_errors(state: WorkflowState) -> bool:
+    """Return True if state contains any non-recoverable errors."""
+    errors = state.get("errors", [])
+    return any(not _is_recoverable_error(e) for e in errors)
 
 
 # =============================================================================
@@ -93,7 +107,7 @@ def route_after_intake(state: WorkflowState) -> Literal["data_explorer", "litera
         logger.warning("Routing to fallback from intake due to errors")
         return "fallback"
     
-    if state.get("errors"):
+    if _has_fatal_errors(state):
         return "__end__"
     
     if state.get("status") == ResearchStatus.INTAKE_COMPLETE:
@@ -129,7 +143,7 @@ def route_after_data_explorer(state: WorkflowState) -> Literal["literature_revie
     if state.get("errors"):
         # Check if errors are recoverable (data quality issues)
         errors = state.get("errors", [])
-        if all(getattr(e, "recoverable", True) for e in errors):
+        if all(_is_recoverable_error(e) for e in errors):
             # Continue with warnings
             logger.warning("Continuing with recoverable data explorer errors")
             return "literature_reviewer"
@@ -163,7 +177,7 @@ def route_after_literature_reviewer(state: WorkflowState) -> Literal["literature
     
     # Check for fatal (non-recoverable) errors only
     errors = state.get("errors", [])
-    fatal_errors = [e for e in errors if hasattr(e, 'recoverable') and not e.recoverable]
+    fatal_errors = [e for e in errors if not _is_recoverable_error(e)]
     if fatal_errors:
         logger.error(f"Fatal errors in literature reviewer: {fatal_errors}")
         return "__end__"
@@ -195,7 +209,7 @@ def route_after_synthesizer(state: WorkflowState) -> Literal["gap_identifier", "
     
     # Only stop on fatal (non-recoverable) errors
     errors = state.get("errors", [])
-    fatal_errors = [e for e in errors if hasattr(e, 'recoverable') and not e.recoverable]
+    fatal_errors = [e for e in errors if not _is_recoverable_error(e)]
     if fatal_errors:
         logger.error(f"Fatal errors in synthesizer: {fatal_errors}")
         return "__end__"
@@ -225,7 +239,7 @@ def route_after_gap_identifier(state: WorkflowState) -> Literal["planner", "fall
         logger.warning("Routing to fallback from gap_identifier due to errors")
         return "fallback"
     
-    if state.get("errors"):
+    if _has_fatal_errors(state):
         return "__end__"
     
     # Check if gap analysis is complete
@@ -315,7 +329,7 @@ def route_after_planner(state: WorkflowState) -> Literal["data_acquisition", "co
         logger.warning("Routing to fallback from planner due to errors")
         return "fallback"
     
-    if state.get("errors"):
+    if _has_fatal_errors(state):
         return "__end__"
     
     # Check if plan is approved
@@ -374,7 +388,7 @@ def route_after_data_acquisition(state: WorkflowState) -> Literal["data_analyst"
         logger.warning("Routing to fallback from data_acquisition due to errors")
         return "fallback"
     
-    if state.get("errors"):
+    if _has_fatal_errors(state):
         return "__end__"
     
     # Check for critical acquisition failures
@@ -422,14 +436,17 @@ def route_after_analysis(state: WorkflowState) -> Literal["writer", "fallback", 
         logger.warning("Routing to fallback from analysis due to errors")
         return "fallback"
     
-    if state.get("errors"):
+    if _has_fatal_errors(state):
         return "__end__"
     
     # Check for analysis completion
+    # Canonical analysis output used across both analysis branches
+    has_analysis = state.get("analysis") is not None
+    # Legacy keys (kept for backward compatibility)
     has_data_analysis = state.get("data_analyst_output") is not None
     has_conceptual_synthesis = state.get("conceptual_synthesis_output") is not None
-    
-    if has_data_analysis or has_conceptual_synthesis:
+
+    if has_analysis or has_data_analysis or has_conceptual_synthesis:
         return "writer"
     
     return "__end__"
@@ -456,7 +473,7 @@ def route_after_writer(state: WorkflowState) -> Literal["reviewer", "fallback", 
         logger.warning("Routing to fallback from writer due to errors")
         return "fallback"
     
-    if state.get("errors"):
+    if _has_fatal_errors(state):
         return "__end__"
     
     # Check for writer output

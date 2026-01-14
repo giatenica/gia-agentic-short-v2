@@ -528,24 +528,44 @@ def literature_synthesizer_node(state: WorkflowState) -> dict[str, Any]:
     
     # Handle empty search results (e.g., from rate limiting or novel topic)
     if not search_results:
+        synthesis_text = (
+            "Literature search returned no results. This may indicate: "
+            "(1) API rate limiting during search, (2) a novel research area "
+            "with limited existing literature, or (3) highly specific query terms. "
+            "The research will proceed with data-driven analysis as the primary approach."
+        )
+        themes = ["Data-driven research approach"]
+        gaps = [
+            "Existing literature on this specific topic appears limited or inaccessible. "
+            "This presents an opportunity for original contribution through empirical analysis."
+        ]
+        contribution = (
+            "Given the limited accessible literature, this research will make an "
+            "empirical contribution by analyzing the available data to generate "
+            "insights and findings that can inform future work in this area."
+        )
         return {
             "status": ResearchStatus.GAP_IDENTIFICATION_COMPLETE,
-            "literature_synthesis": (
-                "Literature search returned no results. This may indicate: "
-                "(1) API rate limiting during search, (2) a novel research area "
-                "with limited existing literature, or (3) highly specific query terms. "
-                "The research will proceed with data-driven analysis as the primary approach."
-            ),
-            "literature_themes": ["Data-driven research approach"],
-            "identified_gaps": [
-                "Existing literature on this specific topic appears limited or inaccessible. "
-                "This presents an opportunity for original contribution through empirical analysis."
-            ],
-            "contribution_statement": (
-                "Given the limited accessible literature, this research will make an "
-                "empirical contribution by analyzing the available data to generate "
-                "insights and findings that can inform future work in this area."
-            ),
+            "literature_synthesis": {
+                "summary": synthesis_text,
+                "state_of_field": "",
+                "key_findings": [],
+                "theoretical_frameworks": [],
+                "methodological_approaches": [],
+                "contribution_opportunities": [contribution],
+                "full_synthesis": synthesis_text,
+                "themes": themes,
+                "gaps": gaps,
+                "contribution_statement": contribution,
+                "limitations": "No literature items were available for synthesis.",
+                "proceeding_strategy": "data-driven",
+                "papers_analyzed": 0,
+                "themes_identified": len(themes),
+                "gaps_identified": len(gaps),
+            },
+            "literature_themes": themes,
+            "identified_gaps": gaps,
+            "contribution_statement": contribution,
             "refined_query": original_query,  # Keep original query
             "messages": [AIMessage(
                 content=(

@@ -338,7 +338,7 @@ class TestRouteAfterDataExplorer:
         state["status"] = ResearchStatus.FAILED
         
         route = route_after_data_explorer(state)
-        assert route == "end"
+        assert route == "__end__"
     
     def test_route_to_literature_on_success(self):
         """Test routing to literature reviewer on success."""

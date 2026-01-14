@@ -5,12 +5,15 @@ Writes the results/findings section:
 - Economic magnitude interpretation
 - Robustness checks
 - DOES NOT include interpretation (that's discussion)
+
+Sprint 16: Enhanced with table/figure reference generation.
 """
 
 from src.writers.base import BaseSectionWriter, SectionWriterConfig
 from src.state.models import SectionWritingContext
 from src.style import StyleEnforcer
 from src.citations import CitationManager
+from src.writers.artifact_helpers import generate_results_artifacts_prompt
 
 
 class ResultsWriter(BaseSectionWriter):
@@ -103,6 +106,14 @@ RESULTS-SPECIFIC RULES:
             f"METHODOLOGY USED: {context.methodology_summary[:500] if context.methodology_summary else 'See methods section'}",
             "",
         ]
+        
+        # Sprint 16: Add table and figure artifacts
+        artifacts_prompt = generate_results_artifacts_prompt(
+            tables=context.tables,
+            figures=context.figures,
+        )
+        if artifacts_prompt:
+            prompt_parts.extend([artifacts_prompt, ""])
         
         if context.has_quantitative_results:
             prompt_parts.extend([

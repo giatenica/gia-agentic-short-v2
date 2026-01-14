@@ -19,6 +19,7 @@ from src.state.models import (
 )
 from src.style import StyleEnforcer
 from src.citations import CitationManager
+from src.writers.style_guide import get_style_guide_excerpt
 
 
 @dataclass
@@ -120,6 +121,37 @@ class BaseSectionWriter(ABC):
         # Get prompts
         system_prompt = self.get_system_prompt(context)
         user_prompt = self.get_user_prompt(context)
+
+        # If this is a revision cycle, prepend reviewer guidance.
+        if (
+            getattr(context, "is_revision", False)
+            or getattr(context, "revision_instructions", "")
+            or getattr(context, "critique_for_section", "")
+            or getattr(context, "human_feedback", "")
+        ):
+            iteration = getattr(context, "revision_iteration", None)
+            iteration_line = f"Revision iteration: {iteration}" if iteration else "Revision iteration: (unknown)"
+            revision_block = "\n".join(
+                [
+                    "REVISION CONTEXT:",
+                    iteration_line,
+                    "", 
+                    "You are revising an existing draft. You MUST address the reviewer feedback.",
+                    "Do not change the research question or methodology unless explicitly requested.",
+                    "Do not introduce claims that are not supported by the provided analysis.",
+                    "",
+                    f"OVERALL REVISION INSTRUCTIONS:\n{getattr(context, 'revision_instructions', '')}".strip(),
+                    "",
+                    f"SECTION-SPECIFIC CRITIQUE ITEMS:\n{getattr(context, 'critique_for_section', '')}".strip(),
+                    "",
+                    f"HUMAN FEEDBACK (if any):\n{getattr(context, 'human_feedback', '')}".strip(),
+                    "",
+                    "Now produce the revised section.",
+                    "---",
+                    "",
+                ]
+            ).strip()
+            user_prompt = f"{revision_block}\n\n{user_prompt}"
         
         # Invoke LLM
         messages = [
@@ -232,6 +264,9 @@ class BaseSectionWriter(ABC):
     
     def _get_common_instructions(self) -> str:
         """Get common writing instructions for all sections."""
+        style_guide = get_style_guide_excerpt()
+        style_block = f"\n\nPROJECT WRITING STYLE GUIDE (EXCERPT):\n{style_guide}" if style_guide else ""
+
         return """
 CRITICAL WRITING RULES:
 1. NEVER use em dashes or en dashes; use semicolons, colons, or periods instead
@@ -243,7 +278,14 @@ CRITICAL WRITING RULES:
 6. Write in active voice where possible
 7. Be precise and concise; every sentence should add value
 8. Do not overclaim; use appropriate qualification
-"""
+
+LATEX OUTPUT REQUIREMENTS:
+- Output MUST be valid LaTeX for the body of this section.
+- Do NOT use Markdown (no # headers, no bullet hyphens meant as Markdown, no code fences).
+- Do NOT include a LaTeX preamble or \\begin{document}/\\end{document}.
+- Do NOT include \\section{...} or \\subsection{...} headings for the main section heading.
+- Use LaTeX environments where helpful: itemize/enumerate, equation/align, and proper escaping for special characters.
+""" + style_block
     
     def _format_available_citations(self, citations: list[CitationEntry]) -> str:
         """Format available citations for the prompt."""

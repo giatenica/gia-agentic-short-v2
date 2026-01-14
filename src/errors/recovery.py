@@ -314,9 +314,16 @@ def get_partial_output(state: dict[str, Any]) -> dict[str, Any]:
         output["research_question"] = state["refined_query"]
     elif state.get("original_query"):
         output["research_question"] = state["original_query"]
+    elif state.get("research_question"):
+        output["research_question"] = state["research_question"]
     
-    # Literature review results
-    if state.get("literature_review_results"):
+    # Literature review / synthesis
+    if state.get("literature_synthesis"):
+        output["literature_review"] = state["literature_synthesis"]
+    elif state.get("search_results"):
+        output["literature_review"] = state["search_results"]
+    elif state.get("literature_review_results"):
+        # Legacy key
         output["literature_review"] = state["literature_review_results"]
     
     # Gap analysis
@@ -328,9 +335,13 @@ def get_partial_output(state: dict[str, Any]) -> dict[str, Any]:
         output["research_plan"] = state["research_plan"]
     
     # Data analysis results
-    if state.get("data_analyst_output"):
+    if state.get("analysis"):
+        output["analysis_results"] = state["analysis"]
+    elif state.get("data_analyst_output"):
+        # Legacy key
         output["analysis_results"] = state["data_analyst_output"]
     elif state.get("conceptual_synthesis_output"):
+        # Legacy key
         output["analysis_results"] = state["conceptual_synthesis_output"]
     
     # Writer output
@@ -366,7 +377,7 @@ def _get_incomplete_stages(state: dict[str, Any]) -> list[str]:
     incomplete = []
     
     # Check each stage
-    if not state.get("literature_review_results"):
+    if not state.get("literature_synthesis") and not state.get("search_results") and not state.get("literature_review_results"):
         incomplete.append("literature_review")
     
     if not state.get("gap_analysis"):
@@ -375,7 +386,7 @@ def _get_incomplete_stages(state: dict[str, Any]) -> list[str]:
     if not state.get("research_plan"):
         incomplete.append("research_planning")
     
-    if not state.get("data_analyst_output") and not state.get("conceptual_synthesis_output"):
+    if not state.get("analysis") and not state.get("data_analyst_output") and not state.get("conceptual_synthesis_output"):
         incomplete.append("analysis")
     
     if not state.get("writer_output"):
@@ -402,6 +413,8 @@ def create_fallback_content(
     """
     # Get project context
     question = state.get("refined_query") or state.get("original_query", "")
+    if not question:
+        question = state.get("research_question", "")
     
     # Section-specific fallbacks
     if section == "abstract":
@@ -425,8 +438,15 @@ def create_fallback_content(
         )
     
     elif section == "literature_review":
-        lit_results = state.get("literature_review_results", {})
-        papers_found = len(lit_results.get("papers", []))
+        search_results = state.get("search_results")
+        if isinstance(search_results, list):
+            papers_found = len(search_results)
+        elif isinstance(search_results, dict):
+            papers_found = len(search_results.get("papers", []))
+        else:
+            # Legacy key
+            lit_results = state.get("literature_review_results", {})
+            papers_found = len(lit_results.get("papers", [])) if isinstance(lit_results, dict) else 0
         return (
             f"# Literature Review\n\n"
             f"**Note: This section requires manual completion.**\n\n"
@@ -453,6 +473,7 @@ def create_fallback_content(
     
     elif section == "results":
         has_analysis = bool(
+            state.get("analysis") or
             state.get("data_analyst_output") or 
             state.get("conceptual_synthesis_output")
         )

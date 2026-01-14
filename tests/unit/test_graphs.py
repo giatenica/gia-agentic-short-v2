@@ -474,10 +474,17 @@ class TestRouteAfterAnalysis:
         """Test routing to writer after data analysis."""
         result = route_after_analysis(state_with_analysis)
         assert result == "writer"
+
+    def test_route_to_writer_with_analysis_field(self):
+        """Test routing to writer when canonical analysis field exists."""
+        state = {"analysis": {"findings": "Test"}}
+        result = route_after_analysis(state)
+        assert result == "writer"
     
     def test_route_to_writer_with_conceptual_synthesis(self):
         """Test routing to writer after conceptual synthesis."""
-        state = {"conceptual_synthesis_output": {"framework": "Test"}}
+        # Conceptual synthesizer writes to the canonical `analysis` field.
+        state = {"analysis": {"framework": "Test"}}
         result = route_after_analysis(state)
         assert result == "writer"
     

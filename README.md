@@ -87,6 +87,24 @@ Open: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 uv run python -m src.main
 ```
 
+## LaTeX, Tables, Figures, and PDF Output
+
+On successful completion, the `output` node:
+
+- Exports table artifacts as `.tex` and figure artifacts as `.png`
+- Assembles a complete LaTeX paper from the WRITER sections
+- Compiles a PDF when a LaTeX engine is installed
+
+Configuration:
+
+- `OUTPUT_DIR` controls where outputs are written (default: `data/outputs`).
+
+To enable PDF compilation, install a LaTeX engine:
+
+- Recommended: `tectonic`
+- Alternatives: `latexmk` or `pdflatex`
+- macOS example: `brew install tectonic`
+
 ## Workflow Nodes
 
 | Node | Purpose | HITL |

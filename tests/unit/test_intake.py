@@ -360,7 +360,7 @@ class TestRouteAfterIntake:
         state["status"] = ResearchStatus.FAILED
         
         route = route_after_intake(state)
-        assert route == "end"
+        assert route == "__end__"
     
     def test_route_to_end_on_pending(self):
         """Test routing to end on pending status."""
@@ -368,7 +368,7 @@ class TestRouteAfterIntake:
         state["status"] = ResearchStatus.INTAKE_PENDING
         
         route = route_after_intake(state)
-        assert route == "end"
+        assert route == "__end__"
     
     def test_route_to_data_explorer_with_data(self):
         """Test routing to data explorer when data uploaded."""

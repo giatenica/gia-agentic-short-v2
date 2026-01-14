@@ -628,6 +628,45 @@ class TestWriterNodeBuildContext:
         
         assert len(context.prior_sections) == 1
 
+    def test_build_context_includes_revision_feedback(self):
+        """Test build_section_context includes reviewer revision guidance."""
+        from src.nodes.writer import build_section_context
+        from src.writers import ArgumentManager
+
+        state = {
+            "original_query": "How does X affect Y?",
+            "target_journal": "rfs",
+            "paper_type": "short_article",
+            "revision_request": {
+                "sections_to_revise": ["introduction"],
+                "revision_instructions": "Tighten contribution and add citations.",
+                "iteration_count": 2,
+                "critique_items": [
+                    {
+                        "section": "introduction",
+                        "issue": "The motivation is too generic.",
+                        "severity": "major",
+                        "suggestion": "State the economic mechanism and why dual-class matters.",
+                    }
+                ],
+            },
+            "human_feedback": "Please keep it concise.",
+        }
+        manager = ArgumentManager()
+
+        context = build_section_context(
+            state=state,
+            section_type=SectionType.INTRODUCTION,
+            completed_sections=[],
+            argument_manager=manager,
+        )
+
+        assert context.is_revision is True
+        assert context.revision_iteration == 2
+        assert "Tighten contribution" in context.revision_instructions
+        assert "motivation is too generic" in context.critique_for_section
+        assert "keep it concise" in context.human_feedback
+
 
 class TestGetSectionWriter:
     """Tests for get_section_writer function."""
