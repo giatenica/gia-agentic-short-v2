@@ -100,19 +100,32 @@ MY_TOOLS = [my_tool]
 
 Each `route_after_*` function in `routers.py` checks `_should_fallback(state)` first (3+ errors or unrecoverable), then applies node-specific logic returning a `Literal` of valid next-node names.
 
+### Agent Creation Pattern
+
+New agents MUST use `create_react_agent()` from `src/agents/base.py`, which builds a ReAct (Reasoning + Acting) graph: `agent -> should_continue? -> tools -> agent -> END`. Key requirements:
+- System prompt MUST include current date via `datetime.now(timezone.utc)`
+- Use `ChatAnthropic` with `settings.default_model` and `settings.anthropic_api_key`
+- Bind tools with `model.bind_tools(tools)`, use `ToolNode` for execution
+- Accept optional `checkpointer` and `store` for persistence
+- In `studio/graphs.py`, do NOT pass `checkpointer` or `store`; LangGraph API handles persistence automatically
+
+### Error Hierarchy
+
+All custom exceptions inherit from `GIAError` (in `src/errors/exceptions.py`), which carries `message`, `details`, and `recoverable` attributes. Key subclasses: `WorkflowError`, `NodeExecutionError`, `ToolExecutionError`, `APIError` (with `RateLimitError`), `DataValidationError`, `SearchError`, `AnalysisError`, `WritingError`, `ReviewError`. Recovery strategies (RETRY, SKIP, FALLBACK, ABORT) are in `src/errors/policies.py`.
+
 ## Critical Rules
 
 - **NEVER fabricate data, statistics, or citations** -- all claims must be sourced
 - **NEVER use emojis or em dashes** -- use semicolons, colons, or periods instead
 - **ALWAYS use timezone-aware datetimes** -- `datetime.now(timezone.utc)`, never `datetime.utcnow()`
 - **ALWAYS include current date in system prompts** for any new agents
+- **ALWAYS cite sources** for quantitative claims
+- **ALWAYS flag outdated knowledge** that needs web search
 
 ### Banned Words
 
-Never use these in generated text (unless quoting or in a strictly technical context):
-delve, realm, harness, unlock, tapestry, paradigm, cutting-edge, revolutionize, landscape, potential, findings, intricate, showcasing, crucial, pivotal, surpass, meticulously, vibrant, unparalleled, underscore, leverage, synergy, innovative, game-changer, testament, commendable, meticulous, highlight, emphasize, boast, groundbreaking, align, foster, showcase, enhance, holistic, garner, accentuate, pioneering, trailblazing, unleash, versatile, transformative, redefine, seamless, optimize, scalable, robust (non-statistical), breakthrough, empower, streamline, novel, unique, utilize, impactful
-
-Full list in `src/style/banned_words.py` and `.github/copilot-instructions.md`.
+Never use these in generated text (unless quoting or in a strictly technical context). The full set (~100 words) is in `src/style/banned_words.py` with suggested replacements. Core examples:
+delve, realm, harness, unlock, tapestry, paradigm, cutting-edge, revolutionize, landscape, potential, findings, intricate, showcasing, crucial, pivotal, surpass, meticulously, vibrant, unparalleled, underscore, leverage, synergy, innovative, game-changer, testament, commendable, meticulous, highlight, emphasize, boast, groundbreaking, align, foster, showcase, enhance, holistic, garner, accentuate, pioneering, trailblazing, unleash, versatile, transformative, redefine, seamless, optimize, scalable, robust (non-statistical), breakthrough, empower, streamline, novel, unique, utilize, impactful, intelligent, smart, next-gen, frictionless, elevate, adaptive, effortless, data-driven, insightful, proactive, mission-critical, visionary, disruptive, reimagine, unprecedented, state-of-the-art, dynamic (non-technical), AI-powered, paradigm-shifting
 
 ## Environment Variables
 
